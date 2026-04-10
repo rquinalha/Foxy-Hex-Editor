@@ -59,7 +59,7 @@ You can find pre-compiled versions in the **Releases** section of the repository
 - 🐧 **Linux**: AppImage (works on almost all distros).
 
 > [!TIP]
-> **[Click here to access the downloads page]([https://github.com/YOUR_USER/Foxy-Hex-Editor/releases](https://github.com/rquinalha/Foxy-Hex-Editor/releases/tag/v1.0.0))**
+> **[Click here to download the latest version](https://github.com/rquinalha/Foxy-Hex-Editor/releases/tag/v1.0.0)**
 
 ## 🚀 How to Run and Configure
  
