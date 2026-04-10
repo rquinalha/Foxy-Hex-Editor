@@ -22,9 +22,9 @@
 
 ## 📸 Screenshots
 <p align="center">
-  <img src="assets/customize.png" width="400" alt="Customize"><br><br>
-  <img src="assets/relative.png" width="400" alt="Relative Search"><br><br>
-  <img src="assets/analysis.png" width="400" alt="ROM Analysis"><br><br>
+  <img src="assets/customize.png" width="400" alt="Customize">
+  <img src="assets/relative.png" width="400" alt="Relative Search">
+  <img src="assets/analysis.png" width="400" alt="ROM Analysis">
   <img src="assets/table.png" width="400" alt="Table Editor">
 </p>
 
