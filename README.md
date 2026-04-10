@@ -59,7 +59,7 @@ Você pode encontrar as versões pré-compiladas na seção de **Releases** do r
 - 🐧 **Linux**: AppImage (funciona em quase todas as distros).
 
 > [!TIP]
-> **[Clique aqui para acessar a página de downloads](https://github.com/SEU_USUARIO/Foxy-Hex-Editor/releases)**
+> **[Clique aqui para baixar a versão mais recente](https://github.com/rquinalha/Foxy-Hex-Editor/releases/tag/v1.0.0)**
 
 ## 🚀 Como Rodar e Configurar
 
