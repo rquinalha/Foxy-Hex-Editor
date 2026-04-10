@@ -1,0 +1,418 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="tool.analysis.title">AnÃ¡lise de Arquivo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
+            color: #ffffff;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 20px;
+            gap: 16px;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, rgba(255, 107, 53, 0.15) 0%, rgba(247, 147, 30, 0.15) 100%);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 107, 53, 0.3);
+            padding: 20px;
+            backdrop-filter: blur(5px);
+            flex-shrink: 0;
+        }
+
+        .header h1 {
+            color: #ff6b35;
+            margin: 0 0 16px 0;
+            font-size: 22px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px 16px;
+            border-radius: 8px;
+            border-left: 4px solid;
+        }
+
+        .stat-card.format { border-left-color: #4fc3f7; }
+        .stat-card.size { border-left-color: #81c784; }
+        .stat-card.strings { border-left-color: #ffd700; }
+        .stat-card.entropy { border-left-color: #ff4081; }
+
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .stat-card.format .stat-value { color: #4fc3f7; }
+        .stat-card.size .stat-value { color: #81c784; }
+        .stat-card.strings .stat-value { color: #ffd700; }
+        .stat-card.entropy .stat-value { color: #ff4081; }
+
+        /* Content */
+        .content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            overflow: hidden;
+        }
+
+        .section {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .section.strings-section {
+            flex: 1;
+            min-height: 0;
+        }
+
+        .section-header {
+            background: linear-gradient(135deg, rgba(255, 107, 53, 0.2) 0%, rgba(247, 147, 30, 0.2) 100%);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid rgba(255, 107, 53, 0.3);
+            flex-shrink: 0;
+        }
+
+        .section-header h2 {
+            color: #ff6b35;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .section-header .count {
+            background: rgba(255, 107, 53, 0.3);
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+
+        .section-content {
+            flex: 1;
+            overflow: auto;
+            padding: 0;
+        }
+
+        /* Strings Table */
+        .strings-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        /* Strings Table Header - Opaque background to prevent content showing through */
+        .strings-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .strings-table th {
+            background: linear-gradient(135deg, #8B4513 0%, #A0522D 50%, #CD853F 100%);
+            color: #ffd700;
+            font-weight: 600;
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 13px;
+        }
+
+        .strings-table th:first-child {
+            width: 120px;
+        }
+
+        .strings-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .strings-table tbody tr {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .strings-table tbody tr:nth-child(even) {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .strings-table tbody tr:hover {
+            background: rgba(255, 107, 53, 0.15);
+        }
+
+        .strings-table .offset {
+            color: #4fc3f7;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-weight: 600;
+        }
+
+        .strings-table .text {
+            color: #ffffff;
+            word-break: break-word;
+        }
+
+        /* Patterns Section - Limitada para nÃ£o ocupar espaÃ§o das strings */
+        .section.patterns-section {
+            max-height: 200px;
+            flex-shrink: 0;
+        }
+
+        .section.patterns-section .section-content {
+            overflow-y: auto;
+        }
+        .patterns-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 12px;
+            padding: 16px;
+        }
+
+        .pattern-card {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+            padding: 14px;
+            border-radius: 10px;
+            border-left: 4px solid #4fc3f7;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .pattern-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(79, 195, 247, 0.2);
+        }
+
+        .pattern-card .type {
+            color: #4fc3f7;
+            font-weight: 600;
+            margin-bottom: 6px;
+            font-size: 13px;
+        }
+
+        .pattern-card .details {
+            color: #fff;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #a0a9c0;
+            font-style: italic;
+        }
+
+        /* Footer Actions */
+        .footer {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            flex-shrink: 0;
+            padding-top: 8px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn.primary {
+            background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+        }
+
+        .btn.primary:hover {
+            background: linear-gradient(135deg, #ff7b45 0%, #ffa33e 100%);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 107, 53, 0.3);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 107, 53, 0.5);
+        }
+
+        /* Entropy bar */
+        .entropy-bar {
+            margin-top: 8px;
+            height: 4px;
+            background: linear-gradient(90deg, #81c784 0%, #4fc3f7 25%, #ffd700 50%, #ff9800 75%, #ff6b35 100%);
+            border-radius: 2px;
+            position: relative;
+        }
+
+        .entropy-marker {
+            position: absolute;
+            top: -3px;
+            width: 2px;
+            height: 10px;
+            background: white;
+            border-radius: 1px;
+            transition: left 0.3s ease;
+        }
+
+        .entropy-scale {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            color: #a0a9c0;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header with Stats -->
+        <div class="header">
+            <h1 data-i18n="tool.analysis.header" data-i18n-html>ðŸ“Š AnÃ¡lise Completa do Arquivo</h1>
+            <div class="stats-grid">
+                <div class="stat-card format">
+                    <div class="stat-label" data-i18n="tool.analysis.format">Formato</div>
+                    <div class="stat-value" id="stat-format">-</div>
+                </div>
+                <div class="stat-card size">
+                    <div class="stat-label" data-i18n="tool.analysis.size">Tamanho</div>
+                    <div class="stat-value" id="stat-size">-</div>
+                </div>
+                <div class="stat-card strings">
+                    <div class="stat-label" data-i18n="tool.analysis.strings">Strings</div>
+                    <div class="stat-value" id="stat-strings">-</div>
+                </div>
+                <div class="stat-card entropy">
+                    <div class="stat-label" data-i18n="tool.analysis.entropy">Entropia</div>
+                    <div class="stat-value" id="stat-entropy">-</div>
+                    <div class="entropy-bar">
+                        <div class="entropy-marker" id="entropy-marker" style="left: 0%"></div>
+                    </div>
+                    <div class="entropy-scale">
+                        <span>0</span>
+                        <span>2</span>
+                        <span>4</span>
+                        <span>6</span>
+                        <span>8</span>
+                    </div>
+                    <div id="entropy-note" style="margin-top: 8px; font-size: 11px; color: #d7dcec; line-height: 1.35;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Strings Section -->
+        <div class="section strings-section">
+            <div class="section-header">
+                <h2 data-i18n="tool.analysis.strings_title" data-i18n-html>ðŸ”¤ Strings de Texto</h2>
+                <span class="count" id="strings-count">0</span>
+            </div>
+            <div class="section-content">
+                <table class="strings-table">
+                    <thead>
+                        <tr>
+                            <th data-i18n="tool.analysis.offset" data-i18n-html>ðŸ“ Offset</th>
+                            <th data-i18n="tool.analysis.content" data-i18n-html>ðŸ“ ConteÃºdo</th>
+                        </tr>
+                    </thead>
+                    <tbody id="strings-tbody">
+                        <!-- Populated by renderer -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Patterns Section -->
+        <div class="section patterns-section">
+            <div class="section-header">
+                <h2 data-i18n="tool.analysis.patterns_title" data-i18n-html>ðŸ” PadrÃµes de Dados</h2>
+                <span class="count" id="patterns-count">0</span>
+            </div>
+            <div class="section-content">
+                <div class="patterns-grid" id="patterns-grid">
+                    <!-- Populated by renderer -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer Actions -->
+        <div class="footer">
+            <button class="btn" onclick="analysisTool.exportReport()" data-i18n="tool.analysis.export" data-i18n-html>ðŸ“¥ Exportar</button>
+            <button class="btn" onclick="analysisTool.refresh()" data-i18n="tool.analysis.refresh" data-i18n-html>ðŸ”„ Atualizar</button>
+            <button class="btn primary" onclick="analysisTool.close()" data-i18n="tool.analysis.close" data-i18n-html>âœ• Fechar</button>
+        </div>
+    </div>
+
+    <script src="../js/core/i18n.js"></script>
+    <script src="../js/tools/renderers/analysis_tool_renderer.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.I18n) {
+                I18n.loadSavedLanguage();
+                I18n.applyTranslations();
+            }
+        });
+    </script>
+</body>
+</html>
+

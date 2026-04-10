@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hex Editor</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/notifications.css">
+    <link rel="stylesheet" href="css/components/save-button.css">
+    <link rel="stylesheet" href="css/foxy-dicas.css">
+    <link rel="stylesheet" href="css/enhanced-scroll-controls.css">
+</head>
+
+<body>
+    <!-- Estrutura HTML Principal -->
+    <div class="hex-editor-container" id="hex-editor-container">
+        <!-- Header com logo e toolbar -->
+        <div class="header">
+            <div class="logo">
+                <span><img src="assets/foxy.png" alt="Foxy"
+                        style="width: 24px; height: 24px; vertical-align: middle;"></span>
+                <span>Hex Editor</span>
+            </div>
+            <div class="toolbar">
+                <input type="file" id="file-input" class="file-input-hidden" accept="*/*" multiple>
+                <button class="btn" onclick="openFile()" data-i18n-title="toolbar.open.tooltip"><span class="btn-icon">&#x1F4C1;</span> <span data-i18n="toolbar.open">Abrir</span></button>
+                <div class="save-buttons-container">
+                    <button class="btn primary" onclick="saveFile()" id="save-btn" disabled data-i18n-title="toolbar.save.tooltip"><span class="btn-icon">&#x1F4BE;</span> <span data-i18n="toolbar.save">Salvar</span></button>
+                </div>
+                <button class="btn" onclick="hexEditor.undo()" id="undo-btn" data-i18n-title="toolbar.undo.tooltip"><span class="btn-icon">&#x21B6;</span> <span data-i18n="toolbar.undo">Desfazer</span></button>
+                <button class="btn" onclick="hexEditor.redo()" id="redo-btn" data-i18n-title="toolbar.redo.tooltip"><span class="btn-icon">&#x21B7;</span> <span data-i18n="toolbar.redo">Refazer</span></button>
+                <button class="btn favorite" onclick="hexEditor.showHighlightsManagementModal()" id="highlights-management-btn" data-i18n-title="toolbar.highlights.tooltip"><span class="btn-icon">&#x1F58D;&#xFE0F;</span> <span data-i18n="toolbar.highlights">Marca&ccedil;&otilde;es</span></button>
+                <button class="btn primary" onclick="hexEditor.analyzeROM()" data-i18n-title="toolbar.analyze.tooltip"><span class="btn-icon">&#x1F3AE;</span> <span data-i18n="toolbar.analyze">Analisar</span></button>
+                <button class="btn primary" onclick="openRelativeSearchTool()" data-i18n-title="toolbar.relative_search.tooltip">
+                    <span class="btn-icon">&#x1F50E;</span>
+                    <span data-i18n="toolbar.relative_search">Busca Relativa</span>
+                </button>
+                <button class="btn primary" onclick="hexEditor.showTips()" data-i18n-title="toolbar.help.tooltip"><span class="btn-icon">&#x1F4A1;</span> <span data-i18n="toolbar.help">Ajuda/Help</span></button>
+                <button class="btn primary" id="lang-toggle-btn" onclick="toggleLanguage()" title="Mudar idioma">
+                    <img src="assets/brazil-.png" alt="PT" class="lang-flag" id="lang-flag-icon" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;">
+                    <span id="lang-text">PT</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Barra de controles (busca e modo) -->
+        <div class="control-bar">
+            <div class="mode-indicator" id="mode-indicator" style="min-width: 160px; text-align: center; display: flex; justify-content: center; align-items: center;">
+                <span id="mode-icon">&#x1F441;&#xFE0F;</span>
+                <span id="mode-text" data-i18n="mode.view">Modo Visualiza&ccedil;&atilde;o</span>
+            </div>
+
+            <button class="btn" onclick="hexEditor.toggleEditMode()" id="edit-toggle" style="width: 190px; white-space: nowrap; text-align: center; justify-content: center;" data-i18n-title="mode.edit.tooltip"><span class="btn-icon">&#x270F;&#xFE0F;</span> <span id="edit-toggle-text" data-i18n="mode.edit.enable">Habilitar Edi&ccedil;&atilde;o</span></button>
+
+            <button class="btn" id="insert-mode-toggle" onclick="hexEditor.toggleInsertMode()" style="width: 220px; white-space: nowrap; text-align: center; justify-content: center;" data-i18n-title="mode.insert.tooltip">
+                <span class="btn-icon">&#x21C4;</span>
+                <span id="insert-mode-toggle-text" data-i18n="mode.insert">Inserir/Sobrescrever</span>
+            </button>
+
+            <button class="btn" onclick="hexEditor.showFindReplaceModal()" data-i18n-title="control.find.tooltip"><span class="btn-icon">&#x1F50D;</span> <span data-i18n="control.find">Buscar e Substituir</span></button>
+            <button class="btn" onclick="hexEditor.showGoToModal()" data-i18n-title="control.goto.tooltip"><span class="btn-icon">&#x1F3AF;</span> <span data-i18n="control.goto">Ir para Offset...</span></button>
+            <button class="btn" onclick="hexEditor.showHexCalculatorModal()" data-i18n-title="control.calc.tooltip"><span class="btn-icon">&#x1F9EE;</span> <span data-i18n="control.calc">Calculadora Hex</span></button>
+
+            <button id="color-customization-btn" class="color-customization-btn"
+                onclick="hexEditor.showColorCustomizationModal()" data-i18n-title="control.colors.tooltip">
+                <span class="color-customization-icon">&#x1F3A8;</span> <span data-i18n="control.colors">Customizar</span>
+            </button>
+        </div>
+
+        <div class="file-tabs-bar" id="file-tabs-bar" aria-label="Arquivos abertos">
+            <div class="file-tabs-list" id="file-tabs-list"></div>
+        </div>
+
+        <!-- Área principal -->
+        <div class="main-area">
+            <!-- Sidebar com tabs -->
+            <div class="sidebar">
+                <div class="sidebar-tabs">
+                    <button class="sidebar-tab active" onclick="switchSidebarTab('bookmarks')"><span class="tab-icon">&#x1F516;</span> <span data-i18n="sidebar.bookmarks">Favoritos</span></button>
+                    <button class="sidebar-tab" onclick="switchSidebarTab('history')"><span class="tab-icon">&#x1F4DC;</span> <span data-i18n="sidebar.history">Hist&oacute;rico</span></button>
+                    <button class="sidebar-tab" onclick="switchSidebarTab('analysis')"><span class="tab-icon">&#x1F4CA;</span> <span data-i18n="sidebar.analysis">An&aacute;lise</span></button>
+                    <button class="sidebar-tab" onclick="switchSidebarTab('chartable')"><span class="tab-icon">&#x1F4DD;</span> <span data-i18n="sidebar.chartable">Tabela</span></button>
+                </div>
+
+                <div class="sidebar-content">
+                    <!-- Tab Favoritos -->
+                    <div id="bookmarks-tab" class="tab-content">
+                        <div class="bookmark-actions-container">
+                            <button class="btn btn-full-width" id="sidebar-add-bookmark-btn" onclick="hexEditor.showAddBookmarkModal()" disabled><span class="btn-icon">&#x2795;</span> <span data-i18n="sidebar.add_bookmark">Adicionar Favorito</span></button>
+                            <button class="btn btn-full-width" id="sidebar-export-bookmarks-btn" onclick="hexEditor.exportBookmarks()" disabled><span class="btn-icon">&#x1F4E4;</span> <span data-i18n="sidebar.export_bookmarks">Exportar Favoritos</span></button>
+                            <button class="btn btn-full-width" onclick="hexEditor.importBookmarks()"><span class="btn-icon">&#x1F4E5;</span> <span data-i18n="sidebar.import_bookmarks">Importar Favoritos</span></button>
+                        </div>
+
+                        <div id="bookmarks-list">
+                            <div class="empty-bookmarks" data-i18n="sidebar.no_bookmarks_full" data-i18n-html>
+                                Nenhum favorito ainda<br>
+                                <small>Clique em "Adicionar Favorito" para criar seu primeiro favorito</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab History -->
+                    <div id="history-tab" class="tab-content" style="display: none;">
+                        <div id="history-list">
+                            <!-- History items will be populated dynamically -->
+                        </div>
+
+                        <div style="margin-top: 20px;">
+                            <div class="analysis-section">
+                                <div class="analysis-title" data-i18n="sidebar.edit_stats">&#x1F4CA; Estat&iacute;sticas de Edi&ccedil;&atilde;o</div>
+                                <div id="edit-stats">
+                                    <p data-i18n="sidebar.total_edits">Total de edi&ccedil;&otilde;es: <span id="total-edits">0</span></p>
+                                    <p data-i18n="sidebar.bytes_modified">Bytes modificados: <span id="bytes-modified">0</span></p>
+                                    <p data-i18n="sidebar.file_size">Tamanho do arquivo: <span id="file-size">0 bytes</span></p>
+                                    <p data-i18n="sidebar.unsaved_changes">Altera&ccedil;&otilde;es n&atilde;o salvas: <span id="unsaved-changes">0</span></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab Analysis -->
+                    <div id="analysis-tab" class="tab-content" style="display: none;">
+                        <div class="analysis-section">
+                            <div class="analysis-title" data-i18n="sidebar.rom_info">&#x1F3AE; Informa&ccedil;&otilde;es da ROM</div>
+                            <div id="rom-analysis">
+                                <p><strong data-i18n="sidebar.rom_type">Tipo:</strong> <span id="rom-type">Desconhecido</span></p>
+                                <p><strong data-i18n="sidebar.rom_size">Tamanho:</strong> <span id="rom-size">0 bytes</span></p>
+                                <p><strong data-i18n="sidebar.rom_format">Formato:</strong> <span id="rom-format">Desconhecido</span></p>
+                            </div>
+                        </div>
+
+                        <div class="analysis-section">
+                            <div class="analysis-title" data-i18n="sidebar.data_sections">&#x1F4CA; Se&ccedil;&otilde;es de Dados</div>
+                            <div id="data-sections">
+                                <!-- Seções serão preenchidas dinamicamente -->
+                            </div>
+                        </div>
+
+                        <div class="analysis-section">
+                            <div class="analysis-title" data-i18n="sidebar.text_strings">&#x1F524; Strings de Texto</div>
+                            <div id="text-strings">
+                                <!-- Cadeias de texto serão preenchidas dinamicamente -->
+                            </div>
+                        </div>
+
+                        <div class="analysis-section">
+                            <div class="analysis-title" data-i18n="sidebar.stats">&#x1F4C8; Estat&iacute;sticas</div>
+                            <div id="search-stats">
+                                <p data-i18n="sidebar.search_results">Resultados da busca: <span id="total-results">0</span></p>
+                                <p data-i18n="sidebar.current_match">Correspond&ecirc;ncia atual: <span id="current-match">-</span></p>
+                                <p data-i18n="sidebar.total_bookmarks">Total de favoritos: <span id="total-bookmarks">0</span></p>
+                                <p data-i18n="sidebar.entropy">Entropia: <span id="entropy-value">0.0</span></p>
+                            </div>
+                        </div>
+
+                        <div class="analysis-section">
+                            <div class="analysis-title" data-i18n="sidebar.data_patterns">&#x1F50D; Padr&otilde;es de Dados</div>
+                            <div id="pattern-analysis">
+                                <!-- Padrões serão preenchidos dinamicamente -->
+                            </div>
+                        </div>
+
+                        <div class="analysis-section">
+                            <div class="analysis-title" data-i18n="sidebar.entropy_analysis">&#x1F4C8; An&aacute;lise de Entropia</div>
+                            <div id="entropy-analysis">
+                                <!-- Análise de entropia será preenchida dinamicamente -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab Character Table -->
+                    <div id="chartable-tab" class="tab-content" style="display: none;">
+                        <!-- Título fixo -->
+                        <div class="char-table-title" data-i18n="sidebar.char_table_title">Visualiza&ccedil;&atilde;o do Mapeamento de Caracteres</div>
+
+                        <!-- Botões fixos -->
+                        <div class="char-table-buttons">
+                            <button class="btn" style="width: 100%; margin-bottom: 8px;" onclick="openCharacterTableEditor()"><span class="btn-icon">&#x270D;</span> <span data-i18n="sidebar.table_editor">Criar/Editar Tabela</span></button>
+                            <button class="btn" style="width: 100%;" onclick="hexEditor.loadCustomCharTable()"><span class="btn-icon">&#x1F4DD;</span> <span data-i18n="sidebar.load_table">Carregar Tabela</span></button>
+                        </div>
+
+                        <!-- Container da tabela com scroll independente -->
+                        <div class="char-table-container" id="char-table-container">
+                            <div class="char-grid" id="char-grid">
+                                <!-- Grade de caracteres será preenchida por JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hex Viewer -->
+            <div class="hex-viewer">
+                <!-- Header das colunas -->
+                <div class="hex-header">
+                    <div style="text-align: center;">Offset</div>
+                    <div style="text-align: center;">
+                        <div class="hex-header-bytes">
+                            <span>00</span><span>01</span><span>02</span><span>03</span><span>04</span><span>05</span><span>06</span><span>07</span>
+                            <span>08</span><span>09</span><span>0A</span><span>0B</span><span>0C</span><span>0D</span><span>0E</span><span>0F</span>
+                        </div>
+                    </div>
+                    <div class="decoded-text-header">
+                        <span data-i18n="header.decoded_text">Texto Decodificado</span>
+                        <span class="text-column-scroll-debug-header" id="text-column-scroll-debug-header"></span>
+                    </div>
+                </div>
+                <div class="text-column-scrollbar-row">
+                    <div></div>
+                    <div></div>
+                    <div class="text-column-scrollbar-wrap" id="text-column-scrollbar-wrap">
+                        <div class="text-column-scrollbar" id="text-column-scrollbar" aria-hidden="true">
+                            <div class="text-column-scrollbar-thumb" id="text-column-scrollbar-thumb"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Conteúdo hex -->
+                <div class="hex-content" id="hex-content" tabindex="0">
+                    <!-- Conteúdo será gerado dinamicamente -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Status bar -->
+        <div class="status-bar">
+            <div class="status-left">
+                <span><span data-i18n="status.position">Posi&ccedil;&atilde;o:</span> <input type="text" id="cursor-position-input" class="position-input" value="00000000"
+                        maxlength="8" placeholder="00000000" readonly tabindex="-1"
+                        style="pointer-events: none; user-select: none;"></span>
+                <span><span data-i18n="status.selection">Sele&ccedil;&atilde;o:</span> <span id="selection-size">0 bytes</span></span>
+                <span><span data-i18n="status.hex">Hex:</span> <span id="current-value">0x00</span></span>
+                <span><span data-i18n="status.file">Arquivo:</span> <span id="current-file">Nenhum arquivo carregado</span></span>
+                <span id="modification-status" data-i18n="status.not_modified">N&atilde;o modificado</span>
+                <span><span data-i18n="status.char">Caractere:</span> <span id="char-info">-</span></span>
+                <span><span data-i18n="status.table">Tabela:</span> <span id="current-table">ASCII</span></span>
+                <span id="search-status" style="display: none;">
+                    &#x1F50D; <span id="search-term-display"></span>:
+                    <span id="search-count-display">0</span> <span data-i18n="status.search_found">encontrado(s)</span>
+                    <span id="search-current-display" style="margin-left: 4px;">(0/0)</span>
+                </span>
+
+            </div>
+            <div class="status-right">
+                <span id="active-panel-indicator" class="panel-indicator panel-hex" data-i18n="status.panel_hex">HEX</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para adicionar favorito -->
+    <div class="modal" id="bookmark-modal">
+        <div class="modal-content">
+            <div class="modal-header" data-i18n="modal.bookmark.title">
+                &#x1F516; Adicionar Favorito
+            </div>
+            <div style="margin-bottom: 16px;">
+                <input type="text" class="modal-input" id="bookmark-title" data-i18n-placeholder="modal.bookmark.placeholder_title" placeholder="T&iacute;tulo do favorito (opcional)"
+                    autocomplete="off">
+            </div>
+            <div style="margin-bottom: 16px;">
+                <textarea class="modal-input" id="bookmark-comment" data-i18n-placeholder="modal.bookmark.placeholder_comment" placeholder="Coment&aacute;rio ou descri&ccedil;&atilde;o" rows="3"
+                    style="resize: vertical; margin-bottom: 0;"></textarea>
+            </div>
+            <div style="margin-bottom: 16px; font-size: 12px; color: #a0a9c0;">
+                <span data-i18n="modal.bookmark.offset">Offset:</span> <span id="bookmark-offset-display">0x00000000</span>
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="hexEditor.hideAddBookmarkModal()"><span class="btn-icon">&#x274C;</span> <span data-i18n="modal.bookmark.cancel">Cancelar</span></button>
+                <button class="btn primary" onclick="hexEditor.addBookmark()"><span class="btn-icon">&#x1F516;</span> <span data-i18n="modal.bookmark.add">Adicionar Favorito</span></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para busca e substituição -->
+    <div class="modal" id="find-replace-modal">
+        <div class="modal-content" id="find-replace-content">
+            <div class="modal-header">
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                    <span>&#x1F50D; <span data-i18n="modal.find.title">Buscar e Substituir</span></span>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span id="drag-indicator" style="font-size: 12px; opacity: 0.6; display: none;" data-i18n="modal.find.drag">&#x21C4;
+                            Arrastar</span>
+                        <button class="btn" id="pin-modal-btn" onclick="hexEditor.togglePinModal()"
+                            style="padding: 4px 8px; font-size: 10px; background: rgba(255, 255, 255, 0.1);" data-i18n="modal.find.drag">
+                            &#x21C4; Arrastar
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Campo de busca -->
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; color: #ff6b35; font-weight: bold;" data-i18n="modal.find.search_label">Buscar:</label>
+                <input type="text" class="modal-input" id="find-input"
+                    data-i18n-placeholder="modal.find.search_placeholder" placeholder="Buscar (hex: FF AA BB ou texto: HELLO)"
+                    onkeypress="if(event.key==='Enter') hexEditor.performSearch()">
+            </div>
+
+            <!-- Campo de substituição -->
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; color: #ff6b35; font-weight: bold;" data-i18n="modal.find.replace_label">Substituir
+                    por:</label>
+                <input type="text" class="modal-input" id="replace-input"
+                    data-i18n-placeholder="modal.find.replace_placeholder" placeholder="Substituir por (hex: 00 11 22 ou texto: WORLD)">
+            </div>
+
+            <!-- Opções de busca -->
+            <div style="margin-bottom: 16px;">
+                <div class="checkbox-group" style="margin-bottom: 8px;">
+                    <input type="checkbox" id="case-sensitive">
+                    <label for="case-sensitive" data-i18n="modal.find.case_sensitive">Diferenciar Mai&uacute;sculas</label>
+                </div>
+                <div class="checkbox-group" style="margin-bottom: 8px;">
+                    <input type="checkbox" id="whole-word">
+                    <label for="whole-word" data-i18n="modal.find.whole_word">Coincidir Palavra Inteira</label>
+                </div>
+                <div class="checkbox-group" style="margin-bottom: 8px;">
+                    <input type="checkbox" id="regex-mode">
+                    <label for="regex-mode" data-i18n="modal.find.regex">Regex</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="replace-all">
+                    <label for="replace-all" data-i18n="modal.find.replace_all">Substituir Todos</label>
+                </div>
+                <div class="checkbox-group" style="margin-top: 8px;">
+                    <input type="checkbox" id="search-all-tabs">
+                    <label for="search-all-tabs">Buscar em todas as abas</label>
+                </div>
+            </div>
+
+            <!-- Botões de navegação -->
+            <div style="margin-bottom: 16px; display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="btn" onclick="hexEditor.findNext()" id="find-next-btn" data-i18n="modal.find.next">&#x2B07; Pr&oacute;ximo</button>
+                <button class="btn" onclick="hexEditor.findPrevious()" id="find-prev-btn" data-i18n="modal.find.previous">&#x2B06; Anterior</button>
+            </div>
+
+            <!-- Resultados da busca -->
+            <div class="search-results" id="modal-search-results"
+                style="margin-bottom: 16px; padding: 8px; background: rgba(255, 255, 255, 0.05); border-radius: 4px; min-height: 20px;">
+                <!-- Resultados serão exibidos aqui -->
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn" onclick="hexEditor.performSearch()"><span class="btn-icon">&#x1F50D;</span> <span data-i18n="modal.find.search">Buscar</span></button>
+                <button class="btn warning" onclick="hexEditor.performReplace()"><span class="btn-icon">&#x1F504;</span> <span data-i18n="modal.find.replace">Substituir</span></button>
+                <button class="btn" onclick="hexEditor.hideFindReplaceModal()"><span class="btn-icon">&#x274C;</span> <span data-i18n="modal.find.cancel">Cancelar</span></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para análise de ROM -->
+    <div class="modal" id="analysis-modal">
+        <div class="modal-content" style="width: 600px;">
+            <div class="modal-header">
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                    <span>&#x1F3AE; <span data-i18n="modal.analysis.title">Resultados da An&aacute;lise de ROM</span></span>
+                    <button class="modal-close-btn" onclick="hexEditor.hideAnalysisModal()" data-i18n-title="modal.analysis.close">&#x2715;</button>
+                </div>
+            </div>
+            <div id="analysis-results">
+                <!-- Resultados ser�o preenchidos dinamicamente -->
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="hexEditor.hideAnalysisModal()"><span class="btn-icon">&#x274C;</span> <span data-i18n="modal.analysis.close">Fechar</span></button>
+                <button class="btn success" onclick="hexEditor.exportAnalysis()"><span class="btn-icon">&#x1F4CA;</span> <span data-i18n="modal.analysis.export">Exportar Relat&oacute;rio</span></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para tabela de caracteres -->
+    <div class="modal" id="char-table-modal">
+        <div class="modal-content">
+            <div class="modal-header" data-i18n="modal.chartable.title">&#x1F4DD; Sele&ccedil;&atilde;o de Tabela de Caracteres</div>
+            <div id="char-table-list">
+                <div class="analysis-section" onclick="hexEditor.selectCharTable('ascii')" style="cursor: pointer;">
+                    <div class="analysis-title" data-i18n="modal.chartable.ascii">ASCII Padr&atilde;o</div>
+                    <div style="color: #a0a9c0; font-size: 12px;" data-i18n="modal.chartable.ascii_desc">Conjunto de caracteres ASCII padr&atilde;o (32-126)</div>
+                </div>
+                <div class="analysis-section" onclick="hexEditor.selectCharTable('nes_standard')"
+                    style="cursor: pointer;">
+                    <div class="analysis-title" data-i18n="modal.chartable.nes">NES Padr&atilde;o</div>
+                    <div style="color: #a0a9c0; font-size: 12px;" data-i18n="modal.chartable.nes_desc">Mapeamento de caracteres NES comum</div>
+                </div>
+                <div class="analysis-section" onclick="hexEditor.selectCharTable('snes_standard')"
+                    style="cursor: pointer;">
+                    <div class="analysis-title" data-i18n="modal.chartable.snes">SNES Padr&atilde;o</div>
+                    <div style="color: #a0a9c0; font-size: 12px;" data-i18n="modal.chartable.snes_desc">Codifica&ccedil;&atilde;o de texto SNES</div>
+                </div>
+                <div class="analysis-section" onclick="hexEditor.selectCharTable('gb_standard')"
+                    style="cursor: pointer;">
+                    <div class="analysis-title" data-i18n="modal.chartable.gb">Game Boy Padr&atilde;o</div>
+                    <div style="color: #a0a9c0; font-size: 12px;" data-i18n="modal.chartable.gb_desc">Conjunto de caracteres Game Boy</div>
+                </div>
+                <div class="analysis-section" onclick="hexEditor.loadCustomCharTable()" style="cursor: pointer;">
+                    <div class="analysis-title" data-i18n="modal.chartable.load">Carregar Tabela...</div>
+                    <div style="color: #a0a9c0; font-size: 12px;" data-i18n="modal.chartable.load_desc">Carregar arquivo no formato Foxy Editor em .json ou .tbl</div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="hexEditor.hideCharTableModal()"><span class="btn-icon">&#x274C;</span> <span data-i18n="modal.chartable.cancel">Cancelar</span></button>
+                <button class="btn primary" onclick="hexEditor.applyCharTable()"><span class="btn-icon">&#x2705;</span> <span data-i18n="modal.chartable.apply">Aplicar</span></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal da Calculadora Hexadecimal removido para janela independente -->
+    <!-- Customiza��o de Cores: janela independente (color_customization_tool.html) -->
+
+    <!-- Sistema de Internacionaliza��o (i18n) - deve ser carregado primeiro -->
+    <script src="js/core/i18n.js"></script>
+
+    <!-- Scripts -->
+    <script src="js/features/ui/hex_calculator.js"></script>
+    <script src="js/core/enhanced-large-file-handler_core.js"></script>
+    <script src="js/core/enhanced-large-file-handler_ui.js"></script>
+    <script src="js/core/enhanced-large-file-handler_structural.js"></script>
+    <script src="js/core/large-file-test-suite.js"></script>
+    <script src="js/features/editor/context_menu.js"></script>
+    <script src="js/features/editor/context_menu_structure.js"></script>
+    <script src="js/features/editor/context_menu_clipboard.js"></script>
+    <script src="js/features/editor/context_menu_highlights.js"></script>
+    <script src="js/features/editor/context_menu_import_export.js"></script>
+    <script src="js/features/editor/context_menu_position.js"></script>
+    <script src="js/features/editor/context_menu_insert_patch.js"></script>
+    <script src="js/features/editor/context_menu_bootstrap.js"></script>
+    <script src="js/features/editor/enhanced-drag-selection.js"></script>
+    <script src="js/features/editor/optimized-scroll-system.js"></script>
+    <script src="js/core/char_decoder_16bit.js"></script>
+
+    <!-- Electron File Handler - usar versão corrigida local (remoção da versão do app principal para evitar duplicidade) -->
+
+    <!-- Sistema de Notificações -->
+    <script src="js/features/ui/notification_system.js"></script>
+
+    <!-- Correção do Ctrl+V em Modais -->
+    <script src="js/features/ui/modal_paste_fix.js"></script>
+
+
+    <!-- Sistema de Comunicação IPC para Electron -->
+    <script>
+        // Verificar se estamos no Electron - OBRIGAT�RIO
+        if (typeof require !== 'undefined' && typeof process !== 'undefined') {
+            const { ipcRenderer } = require('electron');
+
+            // Handler para receber dados de arquivo do processo principal
+            ipcRenderer.on('load-file-data', (event, data) => {
+                // Aguardar o hex editor estar pronto
+                const checkHexEditorReady = () => {
+                    if (window.isHexEditorReady && window.isHexEditorReady()) {
+                        // Hex editor est� pronto, carregar arquivo
+                        if (window.loadFileFromData && typeof window.loadFileFromData === 'function') {
+                            window.loadFileFromData(data.fileData, data.fileName, data.filePath);
+                        }
+                    } else {
+                        // Tentar novamente em 100ms
+                        setTimeout(checkHexEditorReady, 100);
+                    }
+                };
+
+                // Iniciar verifica��o
+                setTimeout(checkHexEditorReady, 100);
+            });
+
+            // Handler para comandos do menu Arquivo
+            ipcRenderer.on('menu-open-file', async () => {
+                try {
+                    const result = await ipcRenderer.invoke('show-open-dialog', {
+                        title: 'Abrir Arquivo',
+                        properties: ['openFile', 'multiSelections'],
+                        filters: [
+                            { name: 'Todos os arquivos', extensions: ['*'] }
+                        ]
+                    });
+                    
+                    if (!result.canceled && result.filePaths.length > 0) {
+                        const fs = require('fs');
+                        const path = require('path');
+                        const { ipcRenderer } = require('electron');
+
+                        for (const filePath of result.filePaths) {
+                            const stats = fs.statSync(filePath);
+                            const fileName = path.basename(filePath);
+                            const fileSize = stats.size;
+                            
+                            if (fileSize > 800 * 1024 * 1024) {
+                                const fileRef = {
+                                    name: fileName,
+                                    path: filePath,
+                                    size: fileSize
+                                };
+
+                                if (window.fileTabManager && typeof window.fileTabManager.openFiles === 'function') {
+                                    await window.fileTabManager.openFiles([fileRef]);
+                                } else if (window.hexEditor && typeof window.hexEditor.loadFile === 'function') {
+                                    await window.hexEditor.loadFile(fileRef);
+                                }
+                                continue;
+                            }
+
+                            const chunkSize = 10 * 1024 * 1024; // 10MB
+                            const totalChunks = Math.ceil(fileSize / chunkSize);
+                            const allData = new Uint8Array(fileSize);
+                            
+                            for (let i = 0; i < totalChunks; i++) {
+                                const start = i * chunkSize;
+                                const length = Math.min(chunkSize, fileSize - start);
+                                const chunkResult = await ipcRenderer.invoke('read-file-chunk', filePath, start, length);
+                                
+                                if (!chunkResult.success) {
+                                    throw new Error(chunkResult.error || 'Erro ao ler chunk');
+                                }
+                                
+                                allData.set(chunkResult.data, start);
+                            }
+                            
+                            // Criar objeto File-like com os dados
+                            const fileBlob = new Blob([allData]);
+                            fileBlob.name = fileName;
+                            fileBlob.path = filePath;
+                            fileBlob.size = fileSize;
+                            
+                            if (window.fileTabManager && typeof window.fileTabManager.openFiles === 'function') {
+                                await window.fileTabManager.openFiles([fileBlob]);
+                            } else if (window.hexEditor && typeof window.hexEditor.loadFile === 'function') {
+                                await window.hexEditor.loadFile(fileBlob);
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('L Erro ao abrir arquivo:', error);
+                    if (window.notificationSystem) {
+                        window.notificationSystem.error('Erro ao abrir arquivo: ' + error.message, 'Erro');
+                    }
+                }
+            });
+
+            ipcRenderer.on('menu-save-file', () => {
+                if (typeof saveFile === 'function') {
+                    saveFile();
+                } else if (window.hexEditor && typeof window.hexEditor.save === 'function') {
+                    window.hexEditor.save();
+                }
+            });
+
+            ipcRenderer.on('menu-save-as-file', () => {
+                if (typeof saveAsFile === 'function') {
+                    saveAsFile();
+                } else if (window.intelligentSave && typeof window.intelligentSave.saveAs === 'function') {
+                    window.intelligentSave.saveAs();
+                }
+            });
+
+            // Handler para comandos do menu Ferramentas
+            ipcRenderer.on('menu-toggle-edit-mode', () => {
+                if (window.hexEditor && typeof window.hexEditor.toggleEditMode === 'function') {
+                    window.hexEditor.toggleEditMode();
+                }
+            });
+
+            ipcRenderer.on('menu-toggle-insert-mode', () => {
+                if (window.hexEditor && typeof window.hexEditor.toggleInsertMode === 'function') {
+                    window.hexEditor.toggleInsertMode();
+                }
+            });
+
+            ipcRenderer.on('menu-find-replace', () => {
+                if (window.hexEditor && typeof window.hexEditor.showFindReplaceModal === 'function') {
+                    window.hexEditor.showFindReplaceModal();
+                }
+            });
+
+            ipcRenderer.on('menu-goto-offset', () => {
+                if (window.hexEditor && typeof window.hexEditor.showGoToModal === 'function') {
+                    window.hexEditor.showGoToModal();
+                }
+            });
+
+            ipcRenderer.on('menu-hex-calculator', () => {
+                if (window.hexEditor && typeof window.hexEditor.showHexCalculatorModal === 'function') {
+                    window.hexEditor.showHexCalculatorModal();
+                }
+            });
+
+            ipcRenderer.on('menu-highlights', () => {
+                if (window.hexEditor && typeof window.hexEditor.showHighlightsManagementModal === 'function') {
+                    window.hexEditor.showHighlightsManagementModal();
+                }
+            });
+
+            ipcRenderer.on('menu-analyze', () => {
+                if (window.hexEditor && typeof window.hexEditor.analyzeROM === 'function') {
+                    window.hexEditor.analyzeROM();
+                }
+            });
+
+            ipcRenderer.on('menu-bookmarks', () => {
+                if (window.hexEditor && typeof window.hexEditor.showAddBookmarkModal === 'function') {
+                    window.hexEditor.showAddBookmarkModal();
+                }
+            });
+
+            ipcRenderer.on('menu-relative-search', () => {
+                if (typeof openRelativeSearchTool === 'function') {
+                    openRelativeSearchTool();
+                }
+            });
+
+            ipcRenderer.on('menu-customize-colors', () => {
+                if (window.hexEditor && typeof window.hexEditor.showColorCustomizationModal === 'function') {
+                    window.hexEditor.showColorCustomizationModal();
+                }
+            });
+
+            // Handler para favorito adicionado da janela
+            ipcRenderer.on('apply-character-table', (event, payload) => {
+                const hexEditor = window.hexEditor;
+                if (!hexEditor || !payload || !payload.content) return;
+
+                try {
+                    const parsed = hexEditor.parseCharacterTableFile(payload.content, payload.fileName || `table.${payload.format || 'json'}`);
+                    if (!hexEditor.validateFoxyTableFormat(parsed)) {
+                        window.notificationSystem?.error('Tabela inv\u00E1lida.', 'Erro de Tabela');
+                        return;
+                    }
+
+                    if (payload.applyToAllOpenFiles && window.fileTabManager?.applyCharacterTableToAllSessions) {
+                        window.fileTabManager.applyCharacterTableToAllSessions(parsed, 'custom');
+                    } else {
+                        const normalizedTable = typeof hexEditor.normalizeCharacterTable === 'function'
+                            ? hexEditor.normalizeCharacterTable(parsed, parsed.name || 'custom')
+                            : parsed;
+                        const is16BitTable = !!(normalizedTable &&
+                            (normalizedTable.type === '16-bit' || normalizedTable.type === 'UTF-16' ||
+                             (normalizedTable.type && normalizedTable.type.includes && normalizedTable.type.includes('16-bit'))));
+                        const effectiveTableId = is16BitTable ? 'custom16bit' : 'custom';
+
+                        hexEditor.installCustomCharacterTable(normalizedTable, effectiveTableId);
+                        hexEditor.currentCharTable = effectiveTableId;
+                        hexEditor.selectedCharTable = is16BitTable ? normalizedTable : null;
+                        hexEditor.getActive16BitDecoder?.();
+                        hexEditor.updateCharGrid({ force: true });
+                        hexEditor.updateTableDisplay();
+                        hexEditor.render();
+                        hexEditor.updateStatus();
+
+                        const activeSession = window.fileTabManager?.getSessionById?.(window.fileTabManager?.activeSessionId);
+                        if (activeSession && window.fileTabManager?.captureEditorStateInto) {
+                            window.fileTabManager.captureEditorStateInto(activeSession);
+                        }
+                    }
+
+                    if (typeof hexEditor.switchSidebarTab === 'function') {
+                        hexEditor.switchSidebarTab('chartable');
+                    } else if (typeof switchSidebarTab === 'function') {
+                        switchSidebarTab('chartable');
+                    }
+                } catch (error) {
+                    window.notificationSystem?.error('Erro ao aplicar tabela: ' + error.message, 'Erro de Tabela');
+                }
+            });
+
+            ipcRenderer.on('bookmark-added', (event, data) => {
+                
+                if (window.hexEditor) {
+                    
+                    if (typeof window.hexEditor.addBookmarkAt === 'function') {
+                        const title = data.title || '';
+                        const comment = data.comment || '';
+                        const offset = data.offset;
+                        
+                        
+                        // Se estiver editando, remover o bookmark antigo primeiro
+                        if (data.editingId !== undefined && data.editingId !== null) {
+                            window.hexEditor.removeBookmark(data.editingId);
+                        }
+                        
+                        // Usar addBookmarkAt diretamente com os dados recebidos
+                        const defaultTitleTemplate = window.I18n?.t
+                            ? window.I18n.t('tool.bookmark.default_name')
+                            : 'Bookmark {number}';
+                        const defaultTitle = defaultTitleTemplate.replace('{number}', String(window.hexEditor.currentBookmarkId + 1));
+                        window.hexEditor.addBookmarkAt(offset, title || defaultTitle, comment);
+                    } else {
+                        console.error('L addBookmarkAt n�o � uma fun��o');
+                    }
+                } else {
+                    console.error('L hexEditor n�o encontrado');
+                }
+            });
+
+            // Handler para solicita��o de offset para novo favorito
+            ipcRenderer.on('get-cursor-offset-for-bookmark', (event, pendingBookmark) => {
+                if (window.hexEditor && window.hexEditor.cursorPosition !== undefined) {
+                    // Enviar offset atual de volta para o main
+                    ipcRenderer.send('bookmark-offset-response', {
+                        title: pendingBookmark.title,
+                        comment: pendingBookmark.comment,
+                        offset: window.hexEditor.cursorPosition,
+                        editingId: pendingBookmark.editingId  // ID do bookmark sendo editado
+                    });
+                }
+            });
+
+            // Handler para executar importação vinda da janela import_tool
+            ipcRenderer.on('execute-import-selection', (event, data) => {
+                const hexEditor = window.hexEditor;
+                if (!hexEditor) return;
+
+                const importData = new Uint8Array(data.data);
+                const selection = data.selection; // { start, end, length }
+                const useInsert = data.insertionMode;
+                const previousEditMode = hexEditor.editMode;
+
+                try {
+                    if (hexEditor.editMode !== 'edit') {
+                        hexEditor.editMode = 'edit';
+                    }
+
+                    let importApplied = false;
+
+                    if (typeof hexEditor.replaceSelectionWithBytes === 'function') {
+                        importApplied = hexEditor.replaceSelectionWithBytes(
+                            selection.start,
+                            selection.start + selection.length,
+                            importData,
+                            useInsert,
+                            useInsert ? 'Importação inserir' : 'Importação sobrescrever'
+                        );
+                    } else if (useInsert) {
+                        const finalSize = hexEditor.data.length + importData.length;
+                        const newData = new Uint8Array(finalSize);
+                        newData.set(hexEditor.data.slice(0, selection.start));
+                        newData.set(importData, selection.start);
+                        newData.set(hexEditor.data.slice(selection.start), selection.start + importData.length);
+                        hexEditor.data = newData;
+                        for (let i = 0; i < importData.length; i++) {
+                            hexEditor.modifiedBytes.add(selection.start + i);
+                        }
+                        hexEditor.hasUnsavedChanges = true;
+                        hexEditor.selectionStart = selection.start;
+                        hexEditor.selectionEnd = selection.start + importData.length - 1;
+                        hexEditor.cursorPosition = hexEditor.selectionEnd;
+                        hexEditor.render();
+                        importApplied = true;
+                    } else {
+                        for (let i = 0; i < importData.length; i++) {
+                            const pos = selection.start + i;
+                            if (pos < hexEditor.data.length) {
+                                hexEditor.data[pos] = importData[i];
+                                if (hexEditor.modifiedBytes) {
+                                    hexEditor.modifiedBytes.add(pos);
+                                }
+                            }
+                        }
+                        hexEditor.hasUnsavedChanges = true;
+                        hexEditor.selectionStart = selection.start;
+                        hexEditor.selectionEnd = selection.start + Math.min(importData.length, selection.length) - 1;
+                        hexEditor.cursorPosition = hexEditor.selectionEnd;
+                        hexEditor.render();
+                        importApplied = true;
+                    }
+
+                    if (!importApplied) {
+                        throw new Error('A importação não pôde ser aplicada no estado atual do editor.');
+                    }
+
+                    hexEditor.editMode = previousEditMode;
+
+                    if (window.notificationSystem) {
+                        window.notificationSystem.success(`Importação concluída! ${importData.length} bytes processados`, 'Importação');
+                    }
+                } catch (err) {
+                    hexEditor.editMode = previousEditMode;
+                    console.error('Erro ao executar importação:', err);
+                    if (window.notificationSystem) window.notificationSystem.error('Erro ao importar: ' + err.message, 'Erro');
+                }
+            });
+
+
+            // Handler para abrir arquivo recente
+            ipcRenderer.on('open-recent-file', async (event, fileData) => {
+                const { ipcRenderer } = require('electron');
+                const path = fileData.path;
+                const name = fileData.name;
+                const size = fileData.size;
+                
+                try {
+                    // Arquivos grandes (>800MB): usar EnhancedLargeFileHandler
+                    if (size > 800 * 1024 * 1024) {
+                        const fileRef = {
+                            name: name,
+                            path: path,
+                            size: size
+                        };
+
+                        if (window.fileTabManager && typeof window.fileTabManager.openFiles === 'function') {
+                            await window.fileTabManager.openFiles([fileRef]);
+                        } else if (window.hexEditor && typeof window.hexEditor.loadFile === 'function') {
+                            await window.hexEditor.loadFile(fileRef);
+                        }
+                    } else {
+                        // Arquivos pequenos: ler via IPC read-file-chunk
+                        const chunkSize = 10 * 1024 * 1024; // 10MB
+                        const totalChunks = Math.ceil(size / chunkSize);
+                        const allData = new Uint8Array(size);
+                        
+                        for (let i = 0; i < totalChunks; i++) {
+                            const start = i * chunkSize;
+                            const length = Math.min(chunkSize, size - start);
+                            const result = await ipcRenderer.invoke('read-file-chunk', path, start, length);
+                            
+                            if (!result.success) {
+                                throw new Error(result.error || 'Erro ao ler chunk');
+                            }
+                            
+                            allData.set(result.data, start);
+                        }
+                        
+                        // Criar objeto File-like com os dados
+                        const fileBlob = new Blob([allData]);
+                        fileBlob.name = name;
+                        fileBlob.path = path;
+                        fileBlob.size = size;
+                        
+                        if (window.fileTabManager && typeof window.fileTabManager.openFiles === 'function') {
+                            await window.fileTabManager.openFiles([fileBlob]);
+                        } else if (window.hexEditor && typeof window.hexEditor.loadFile === 'function') {
+                            await window.hexEditor.loadFile(fileBlob);
+                        }
+                    }
+                } catch (error) {
+                    console.error('L Erro ao abrir arquivo recente:', error);
+                    if (window.notificationSystem) {
+                        window.notificationSystem.error('Erro ao abrir arquivo: ' + error.message, 'Erro');
+                    }
+                }
+            });
+        } else {
+            console.error('L Hex Editor s� funciona no Electron');
+            // Mostrar erro se tentar abrir no navegador
+            document.body.innerHTML = `
+                <div style="display: flex; justify-content: center; align-items: center; height: 100vh; background: #2a2a2a; color: white; font-family: Arial, sans-serif;">
+                    <div style="text-align: center; padding: 40px;">
+                        <h1 style="color: #f44336; margin-bottom: 20px;">L Hex Editor Electron</h1>
+                        <p style="font-size: 18px; margin-bottom: 20px;">Este editor s� funciona no ambiente Electron.</p>
+                        <h1 style="color: #f44336; margin-bottom: 20px;">�R Hex Editor Electron</h1>
+                        <p style="font-size: 18px; margin-bottom: 20px;">Este editor só funciona no ambiente Electron.</p>
+                        <p style="color: #888;">Abra o Foxy Editor principal para usar o Hex Editor.</p>
+                    </div>
+                </div>
+            `;
+        }
+    </script>
+
+    <!-- Main.js deve ser carregado por último para garantir que o hexEditor esteja disponível -->
+    <script src="js/core/offset-fix.js"></script>
+    <script src="js/core/test-16bit-search.js"></script>
+
+    <!-- Electron File Handler Fixed - para arquivos grandes -->
+    <script src="js/integration/electron_file_handler_fixed.js"></script>
+
+    <script src="js/core/main_pre.js"></script>
+    <script src="js/core/main.js"></script>
+    <script src="js/core/data_provider.js"></script>
+    <script src="js/core/main_core_helpers.js"></script>
+    <script src="js/core/main_navigation.js"></script>
+    <script src="js/core/main_history.js"></script>
+    <script src="js/core/main_editing_operations.js"></script>
+    <script src="js/core/main_key_handling.js"></script>
+    <script src="js/core/main_modals_navigation.js"></script>
+    <script src="js/core/main_position_helpers.js"></script>
+    <script src="js/core/main_char_colors.js"></script>
+    <script src="js/core/main_file_operations.js"></script>
+<script src="js/core/main_events.js"></script>
+<script src="js/core/main_char_tables_management.js"></script>
+<script src="js/core/main_table_codec.js"></script>
+<script src="js/core/main_char_tables_grid.js"></script>
+    <script src="js/core/main_rendering.js"></script>
+    <script src="js/core/main_analysis_core.js"></script>
+    <script src="js/core/main_analysis_modal.js"></script>
+    <script src="js/core/main_analysis_sidebar.js"></script>
+    <script src="js/core/main_color_rendering.js"></script>
+    <script src="js/core/main_color_modal_ui.js"></script>
+    <script src="js/core/main_color_presets.js"></script>
+    <script src="js/core/main_scroll_navigation.js"></script>
+    <script src="js/core/main_core_base.js"></script>
+    <script src="js/core/main_highlights.js"></script>
+    <script src="js/core/main_bookmarks.js"></script>
+    <script src="js/core/boyer-moore.js"></script>
+    <script src="js/core/main_search.js"></script>
+    <script src="js/core/main_bookmark_modal.js"></script>
+    <script src="js/core/main_highlights_table.js"></script>
+    <script src="js/core/main_search_basic.js"></script>
+    <script src="js/core/main_search_algorithms.js"></script>
+    <script src="js/core/main_search_table_codecs.js"></script>
+    <script src="js/core/main_search_table_searches.js"></script>
+    <script src="js/core/main_search_navigation.js"></script>
+    <script src="js/core/main_find_replace.js"></script>
+    <script src="js/core/main_find_replace_window.js"></script>
+    <script src="js/core/main_post_globals.js"></script>
+    <script src="js/core/tab_session_manager.js"></script>
+    <script src="js/core/main_post_bootstrap.js"></script>
+    <script src="js/tools/shared/color_tool_bridge.js"></script>
+
+    <!-- Correção avançada de renderização (inclui suporte nativo a Shift-JIS, 16-bit, DTE/MTE e mapeamento multi-byte) -->
+    <script src="js/core/main_table_compat.js"></script>
+
+    <!-- Shift-JIS Support -->
+    <script src="js/features/editor/shift_jis_support.js"></script>
+
+    <!-- Integração do módulo de busca nativa C++ ultra-rápida -->
+    <script src="js/core/native-search-electron.js"></script>
+
+    <!-- Sistema de Salvamento Inteligente - deve ser carregado após main.js -->
+    <script src="js/core/intelligent-save-system_core.js"></script>
+    <script src="js/core/intelligent-save-system_bootstrap.js"></script>
+
+    <!-- Proteção simples contra perda de dados (apenas aviso + asterisco no título) -->
+    <script src="js/core/simple_save_protection.js"></script>
+
+    <!-- Correções de redimensionamento responsivo -->
+    <script src="js/core/main_responsive.js"></script>
+
+    <!-- Sistema de Dicas do Hex Editor -->
+    <script src="js/features/help/foxy-dicas.js"></script>
+    <!-- Sistema de Dicas do Hex Editor (English Version) -->
+    <script src="js/features/help/foxy-dicas-en.js"></script>
+
+    <!-- Corre��o para bug de carregamento duplicado de arquivos -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const activePanelEl = document.getElementById('active-panel-indicator');
+            if (activePanelEl) {
+                const isHex = this.activePanel === 'hex';
+                const text = isHex 
+                    ? (window.I18n?.t ? window.I18n.t('status.panel_hex') : 'HEX')
+                    : (window.I18n?.t ? window.I18n.t('status.panel_text') : 'TEXTO');
+                activePanelEl.textContent = text;
+                activePanelEl.setAttribute('data-i18n', isHex ? 'status.panel_hex' : 'status.panel_text');
+            }
+
+            const fileInput = document.getElementById('file-input');
+            if (fileInput) {
+                fileInput.multiple = true;
+            }
+        });
+    </script>
+
+    <script>
+        // Fun��o para alternar idioma entre PT e EN
+        function buildRelativeSearchState() {
+            const editor = window.hexEditor;
+            if (!editor || typeof editor.getDataLength !== 'function' || editor.getDataLength() <= 0) {
+                return null;
+            }
+
+            const size = editor.getDataLength();
+            const hasUnsavedChanges = !!editor.hasUnsavedChanges;
+            const filePath = editor.currentFilePath || null;
+            const snapshotLimit = 32 * 1024 * 1024;
+            let snapshotData = null;
+            const snapshotRequired = hasUnsavedChanges || !filePath;
+            let snapshotTooLarge = false;
+
+            if (snapshotRequired) {
+                if (size <= snapshotLimit && typeof editor.createDataSnapshot === 'function') {
+                    snapshotData = Array.from(editor.createDataSnapshot());
+                } else {
+                    snapshotTooLarge = true;
+                }
+            }
+
+            let currentTable = null;
+            try {
+                if (typeof editor.getCurrentCharacterTable === 'function') {
+                    currentTable = editor.getCurrentCharacterTable();
+                }
+            } catch (_) {}
+
+            return {
+                lang: (window.I18n && window.I18n.currentLang) ? window.I18n.currentLang : 'pt',
+                fileName: editor.currentFileName || 'Sem título',
+                filePath: filePath,
+                fileSize: size,
+                hasUnsavedChanges,
+                snapshotRequired,
+                snapshotTooLarge,
+                snapshotData,
+                currentTable: currentTable || null,
+                selectionStart: editor.selectionStart || 0,
+                selectionEnd: editor.selectionEnd || 0
+            };
+        }
+
+        function openRelativeSearchTool() {
+            if (typeof require === 'undefined') return;
+
+            const state = buildRelativeSearchState();
+            if (!state) {
+                const title = window.I18n?.t ? window.I18n.t('toolbar.relative_search') : 'Busca Relativa';
+                const message = window.I18n?.t ? window.I18n.t('toolbar.relative_search.no_file') : 'Abra um arquivo antes de usar a Busca Relativa.';
+                window.notificationSystem?.error(message, title);
+                return;
+            }
+
+            if (state.snapshotTooLarge) {
+                const title = window.I18n?.t ? window.I18n.t('toolbar.relative_search') : 'Busca Relativa';
+                const message = window.I18n?.t ? window.I18n.t('toolbar.relative_search.unsaved_large') : 'A aba atual tem alterações não salvas em um arquivo grande. Salve antes de abrir a Busca Relativa.';
+                window.notificationSystem?.error(message, title);
+                return;
+            }
+
+            const { ipcRenderer } = require('electron');
+            ipcRenderer.send('open-relative-search-window', state);
+        }
+
+        function openCharacterTableEditor() {
+            if (typeof require === 'undefined') return;
+            const { ipcRenderer } = require('electron');
+            let currentTable = null;
+            let isCustomTable = false;
+            let tableFormat = 'tbl';
+
+            try {
+                if (window.hexEditor) {
+                    if (typeof window.hexEditor.getCurrentCharacterTable === 'function') {
+                        currentTable = window.hexEditor.getCurrentCharacterTable();
+                    }
+                    // Verificar se é uma tabela customizada (carregada de arquivo)
+                    isCustomTable = window.hexEditor.currentCharTable === 'custom' || window.hexEditor.currentCharTable === 'custom16bit';
+                    // Obter formato original da tabela
+                    if (currentTable) {
+                        tableFormat = currentTable._originalFormat || 'tbl';
+                    }
+                }
+            } catch (_) {}
+
+            ipcRenderer.send('open-table-editor-window', {
+                lang: (window.I18n && window.I18n.currentLang) ? window.I18n.currentLang : 'pt',
+                currentTable: currentTable || null,
+                isCustomTable: isCustomTable,
+                tableFormat: tableFormat
+            });
+        }
+
+        function toggleLanguage() {
+            const newLang = I18n.toggle();
+            const langFlagIcon = document.getElementById('lang-flag-icon');
+            const langText = document.getElementById('lang-text');
+            const langToggleBtn = document.getElementById('lang-toggle-btn');
+
+            if (newLang === 'en') {
+                langFlagIcon.src = 'assets/united-states.png';
+                langFlagIcon.alt = 'EN';
+                langText.textContent = 'EN';
+            } else {
+                langFlagIcon.src = 'assets/brazil-.png';
+                langFlagIcon.alt = 'PT';
+                langText.textContent = 'PT';
+            }
+
+            // Atualiza o title do bot�o
+            langToggleBtn.title = I18n.t('lang.title');
+
+            // Aplica todas as tradu��es da p�gina
+            I18n.applyTranslations();
+            
+            // Notifica o processo principal para trocar o idioma do menu
+            if (typeof require !== 'undefined') {
+                const { ipcRenderer } = require('electron');
+                ipcRenderer.send('change-menu-language', newLang);
+            }
+            
+            // Atualiza tooltips dos bookmarks na sidebar
+            if (window.hexEditor && window.hexEditor.updateBookmarksList) {
+                window.hexEditor.updateBookmarksList();
+            }
+            
+            // Atualiza indicador de painel ativo na status bar
+            const activePanelEl = document.getElementById('active-panel-indicator');
+            if (activePanelEl && window.hexEditor) {
+                const isHex = window.hexEditor.activePanel === 'hex';
+                activePanelEl.textContent = isHex 
+                    ? I18n.t('status.panel_hex') 
+                    : I18n.t('status.panel_text');
+                activePanelEl.setAttribute('data-i18n', isHex ? 'status.panel_hex' : 'status.panel_text');
+            }
+            
+            // Atualiza modal Foxy Dicas se estiver aberto
+            if (window.foxyDicas && window.foxyDicas.isOpen && window.foxyDicas.isOpen()) {
+                window.foxyDicas.toggleLanguage();
+            } else if (window.foxyDicasEn && window.foxyDicasEn.isOpen && window.foxyDicasEn.isOpen()) {
+                window.foxyDicasEn.toggleLanguage();
+            }
+            
+            // Restaura o nome do arquivo se houver arquivo carregado, sen�o mostra tradu��o de 'Nenhum arquivo carregado'
+            const currentFileEl = document.getElementById('current-file');
+            if (currentFileEl) {
+                if (window.hexEditor && window.hexEditor.currentFileName && window.hexEditor.currentFileName !== 'Nenhum arquivo carregado') {
+                    currentFileEl.textContent = window.hexEditor.currentFileName;
+                } else {
+                    currentFileEl.textContent = I18n.t('status.no_file');
+                }
+            }
+            
+            console.log(`[i18n] Idioma alterado para: ${newLang.toUpperCase()}`);
+        }
+
+        // Inicializa o bot�o de idioma com o idioma salvo
+        document.addEventListener('DOMContentLoaded', function() {
+            const langFlagIcon = document.getElementById('lang-flag-icon');
+            const langText = document.getElementById('lang-text');
+            const langToggleBtn = document.getElementById('lang-toggle-btn');
+
+            if (I18n.currentLang === 'en') {
+                langFlagIcon.src = 'assets/united-states.png';
+                langFlagIcon.alt = 'EN';
+                langText.textContent = 'EN';
+            } else {
+                langFlagIcon.src = 'assets/brazil-.png';
+                langFlagIcon.alt = 'PT';
+                langText.textContent = 'PT';
+            }
+
+            langToggleBtn.title = I18n.t('lang.title');
+            
+            // Aplica tradu��es iniciais
+            I18n.applyTranslations();
+        });
+    </script>
+
+</body>
+
+</html>
+

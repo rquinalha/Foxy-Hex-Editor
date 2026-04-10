@@ -1,0 +1,212 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor de Tabelas - Foxy Hex Editor</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; overflow: hidden; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #111827 0%, #172554 100%);
+            color: #fff;
+            display: grid;
+            grid-template-rows: auto auto 1fr auto;
+        }
+        .header {
+            padding: 14px 18px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.04);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 { font-size: 18px; color: #ff8a3d; }
+        .header p { font-size: 12px; color: #cbd5e1; margin-top: 4px; }
+        .topbar {
+            padding: 12px 18px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            background: rgba(0,0,0,0.15);
+            flex-wrap: wrap;
+        }
+        .topbar input, .topbar select, .topbar button, textarea {
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.14);
+        }
+        .topbar input, .topbar select {
+            background: rgba(15,23,42,0.85);
+            color: #fff;
+            padding: 9px 12px;
+        }
+        .btn {
+            padding: 9px 14px;
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+            cursor: pointer;
+        }
+        .btn.primary {
+            background: linear-gradient(135deg, #ff6b35, #f7931e);
+            border-color: rgba(255,255,255,0.18);
+        }
+        .workspace {
+            min-height: 0;
+            display: grid;
+            grid-template-columns: 310px 1fr;
+        }
+        .sidebar {
+            border-right: 1px solid rgba(255,255,255,0.08);
+            background: rgba(2,6,23,0.35);
+            overflow-y: auto;
+            padding: 16px;
+        }
+        .sidebar h2 {
+            font-size: 13px;
+            color: #ffb066;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .template-list {
+            display: grid;
+            gap: 10px;
+        }
+        .template-card {
+            padding: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.04);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: .15s ease;
+        }
+        .template-card:hover, .template-card.active {
+            border-color: rgba(255,138,61,0.6);
+            background: rgba(255,138,61,0.12);
+        }
+        .template-card strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+        .template-card span {
+            font-size: 12px;
+            color: #cbd5e1;
+            line-height: 1.35;
+        }
+        .editor-pane {
+            display: grid;
+            grid-template-rows: auto 1fr;
+            min-height: 0;
+        }
+        .meta {
+            padding: 16px 18px 10px;
+            display: grid;
+            grid-template-columns: 1fr 180px 180px;
+            gap: 10px;
+            background: rgba(255,255,255,0.02);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .meta label {
+            display: grid;
+            gap: 6px;
+            font-size: 12px;
+            color: #cbd5e1;
+        }
+        .meta input, .meta select {
+            padding: 9px 12px;
+            background: rgba(15,23,42,0.85);
+            color: white;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            min-width: 100px;
+        }
+        .meta-value {
+            padding: 9px 12px;
+            background: rgba(15,23,42,0.85);
+            color: #4ade80;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            min-width: 100px;
+            font-weight: 500;
+        }
+        textarea {
+            width: 100%;
+            height: 100%;
+            resize: none;
+            background: #0b1120;
+            color: #e5e7eb;
+            padding: 16px;
+            font: 13px/1.5 Consolas, 'Courier New', monospace;
+            white-space: pre;
+        }
+        .footer {
+            padding: 10px 18px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            background: rgba(0,0,0,0.18);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+        .status { font-size: 12px; color: #cbd5e1; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1 id="table-editor-title">Editor de Tabelas</h1>
+            <p id="table-editor-subtitle">Crie, edite, aplique e exporte tabelas `.json` e `.tbl` no formato Thingy.</p>
+        </div>
+    </div>
+
+    <div class="topbar">
+        <input id="table-name" type="text" placeholder="Nome da tabela" value="Nova Tabela">
+        <select id="table-format">
+            <option value="tbl">.tbl</option>
+            <option value="json">.json</option>
+        </select>
+        <button class="btn" id="current-btn">Usar Tabela Atual</button>
+        <button class="btn" id="export-btn">Exportar</button>
+        <button class="btn primary" id="apply-btn">Aplicar no Editor Hex</button>
+        <button class="btn" id="close-btn">Fechar</button>
+    </div>
+
+    <div class="workspace">
+        <aside class="sidebar">
+            <h2 id="table-editor-models-title">Modelos Prontos</h2>
+            <div class="template-list" id="template-list"></div>
+        </aside>
+
+        <section class="editor-pane">
+            <div class="meta">
+                <label>
+                    <span id="table-editor-label-name">Nome</span>
+                    <input id="meta-name" type="text" value="Nova Tabela">
+                </label>
+                <label>
+                    <span id="table-editor-label-type">Tipo</span>
+                    <span id="meta-type" class="meta-value">8-bit</span>
+                </label>
+                <label>
+                    <span id="table-editor-label-endianness">Endianness</span>
+                    <span id="meta-endianness" class="meta-value">BE</span>
+                </label>
+            </div>
+            <div class="editor-wrap">
+                <textarea id="table-editor" spellcheck="false"></textarea>
+            </div>
+        </section>
+    </div>
+
+    <div class="footer">
+        <div class="status" id="status-text">Selecione um modelo ou comece do zero.</div>
+        <div class="status" id="table-editor-footer-info">Modelos: ASCII 8/16-bit, Shift-JIS, DTE, MTE, DTE+MTE, Blank</div>
+    </div>
+
+    <script src="../js/tools/renderers/table_editor_tool_renderer.js"></script>
+</body>
+</html>
+
+

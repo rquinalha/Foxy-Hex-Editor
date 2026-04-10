@@ -1,0 +1,189 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="tool.goto.title">Ir para Offset</title>
+    <style>
+        body {
+            background-color: #0f0f1e;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+
+        .goto-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .input-group label {
+            color: #ff6b35;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .goto-input {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            padding: 12px;
+            color: white;
+            font-family: 'JetBrains Mono', 'Consolas', monospace;
+            font-size: 16px;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        .goto-input:focus {
+            border-color: #ff6b35;
+            background: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 10px rgba(255, 107, 53, 0.2);
+        }
+
+        .info-panel {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 14px; /* Aumentado 1px */
+            color: #ffffff;
+            line-height: 1.6;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .info-label {
+            opacity: 0.7;
+        }
+
+        .info-value {
+            font-family: 'JetBrains Mono', monospace;
+            color: #a0a9c0;
+        }
+
+        .actions-group {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn.primary {
+            background: #ff6b35;
+            color: white;
+        }
+
+        .btn.primary:hover {
+            background: #ff8552;
+            transform: translateY(-1px);
+        }
+
+        .btn.secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .btn.secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .shortcuts-info {
+            font-size: 13px;
+            color: #ffffff;
+            text-align: center;
+            margin-top: 15px;
+            opacity: 0.7;
+        }
+
+        .error-message {
+            color: #ff4757;
+            font-size: 12px;
+            margin-top: 4px;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="goto-container">
+        <div class="input-group">
+            <label for="offset-input" data-i18n="tool.goto.offset_label">Offset (HEX por padrao, 0d para DEC):</label>
+            <input type="text" id="offset-input" class="goto-input" data-i18n-placeholder="tool.goto.offset_placeholder" placeholder="Ex: 0001A2B0, 0x1A2B ou 0d4096" autofocus>
+            <div id="error-msg" class="error-message" data-i18n="tool.goto.error_range">Offset fora do range vÃ¡lido</div>
+        </div>
+
+        <div class="info-panel">
+            <div class="info-item">
+                <span class="info-label" data-i18n="tool.goto.file_size">Tamanho do Arquivo:</span>
+                <span id="file-size" class="info-value">0 bytes</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label" data-i18n="tool.goto.current_offset">Offset Atual:</span>
+                <span id="current-offset" class="info-value">0x00000000</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Base Offset:</span>
+                <span id="offset-base" class="info-value">0x00000000</span>
+            </div>
+            <div style="margin-top: 8px; font-size: 12px; opacity: 0.6; text-align: center;">
+                <span data-i18n="tool.goto.valid_range">Range VÃ¡lido:</span> <span id="valid-range" style="font-family: monospace;">0x00000000 - 0x00000000</span>
+            </div>
+        </div>
+
+        <div class="actions-group">
+            <button class="btn secondary" id="cancel-btn" data-i18n="tool.goto.cancel">
+                Cancelar
+            </button>
+            <button class="btn primary" id="goto-btn" data-i18n="tool.goto.go">
+                Ir para Offset
+            </button>
+        </div>
+
+        <div class="shortcuts-info" data-i18n="tool.goto.shortcuts">
+            Atalhos: Enter (Ir), Esc (Fechar)
+        </div>
+    </div>
+
+    <script src="../js/core/i18n.js"></script>
+    <script src="../js/tools/renderers/goto_tool_renderer.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.I18n) {
+                I18n.loadSavedLanguage();
+                I18n.applyTranslations();
+            }
+        });
+    </script>
+</body>
+
+</html>
+

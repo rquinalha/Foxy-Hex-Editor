@@ -1,0 +1,320 @@
+/* 🎯 ENHANCED SCROLL CONTROLS - Controles de precisão para o editor hex */
+
+/* Painel de controles de precisão */
+#precision-controls {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    background: linear-gradient(135deg, rgba(26, 26, 46, 0.95) 0%, rgba(45, 55, 72, 0.95) 100%);
+    border: 2px solid rgba(255, 107, 53, 0.3);
+    border-radius: 12px;
+    padding: 16px;
+    font-size: 12px;
+    color: #ffffff;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 200px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#precision-controls:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+    border-color: rgba(255, 107, 53, 0.5);
+}
+
+/* Título do painel */
+#precision-controls::before {
+    content: '🎯 Controles de Precisão';
+    font-weight: 600;
+    font-size: 14px;
+    color: #ff6b35;
+    margin-bottom: 8px;
+    text-align: center;
+    border-bottom: 1px solid rgba(255, 107, 53, 0.2);
+    padding-bottom: 8px;
+}
+
+/* Labels dos controles */
+#precision-controls label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    color: #e2e8f0;
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+#precision-controls label:hover {
+    color: #ffffff;
+}
+
+/* Checkbox personalizado */
+#precision-controls input[type="checkbox"] {
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255, 107, 53, 0.5);
+    border-radius: 4px;
+    background: rgba(26, 26, 46, 0.8);
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+#precision-controls input[type="checkbox"]:checked {
+    background: #ff6b35;
+    border-color: #ff6b35;
+}
+
+#precision-controls input[type="checkbox"]:checked::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+#precision-controls input[type="checkbox"]:hover {
+    border-color: #ff6b35;
+    transform: scale(1.05);
+}
+
+/* Sliders personalizados */
+#precision-controls input[type="range"] {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(74, 85, 104, 0.5);
+    outline: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+#precision-controls input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ff6b35 0%, #ff8c42 100%);
+    cursor: pointer;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3);
+    transition: all 0.2s ease;
+}
+
+#precision-controls input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+    box-shadow: 0 4px 12px rgba(255, 107, 53, 0.5);
+}
+
+#precision-controls input[type="range"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ff6b35 0%, #ff8c42 100%);
+    cursor: pointer;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3);
+    transition: all 0.2s ease;
+}
+
+#precision-controls input[type="range"]::-moz-range-thumb:hover {
+    transform: scale(1.2);
+    box-shadow: 0 4px 12px rgba(255, 107, 53, 0.5);
+}
+
+/* Track do slider */
+#precision-controls input[type="range"]::-webkit-slider-track {
+    background: linear-gradient(90deg, rgba(255, 107, 53, 0.3) 0%, rgba(74, 85, 104, 0.5) 100%);
+    border-radius: 3px;
+    height: 6px;
+}
+
+#precision-controls input[type="range"]::-moz-range-track {
+    background: linear-gradient(90deg, rgba(255, 107, 53, 0.3) 0%, rgba(74, 85, 104, 0.5) 100%);
+    border-radius: 3px;
+    height: 6px;
+    border: none;
+}
+
+/* Valores dos sliders */
+#precision-controls .slider-value {
+    font-size: 11px;
+    color: #a0aec0;
+    text-align: center;
+    margin-top: 4px;
+    font-family: 'Courier New', monospace;
+}
+
+/* Botão de fechar */
+#precision-controls .close-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: rgba(229, 62, 62, 0.8);
+    color: #ffffff;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+#precision-controls .close-btn:hover {
+    background: #e53e3e;
+    transform: scale(1.1);
+}
+
+/* Indicadores de status */
+#precision-controls .status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #a0aec0;
+    padding: 4px 8px;
+    background: rgba(26, 26, 46, 0.5);
+    border-radius: 6px;
+    border-left: 3px solid #ff6b35;
+}
+
+/* Animações */
+@keyframes precisionPulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+#precision-controls.precision-active {
+    animation: precisionPulse 2s infinite;
+    border-color: rgba(255, 107, 53, 0.8);
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    #precision-controls {
+        top: 10px;
+        right: 10px;
+        left: 10px;
+        min-width: auto;
+        font-size: 11px;
+        padding: 12px;
+    }
+    
+    #precision-controls::before {
+        font-size: 12px;
+    }
+}
+
+/* Modo escuro/claro */
+@media (prefers-color-scheme: light) {
+    #precision-controls {
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(237, 242, 247, 0.95) 100%);
+        color: #2d3748;
+        border-color: rgba(255, 107, 53, 0.4);
+    }
+    
+    #precision-controls label {
+        color: #4a5568;
+    }
+    
+    #precision-controls label:hover {
+        color: #2d3748;
+    }
+    
+    #precision-controls input[type="checkbox"] {
+        background: rgba(255, 255, 255, 0.8);
+        border-color: rgba(255, 107, 53, 0.6);
+    }
+    
+    #precision-controls .status-indicator {
+        background: rgba(255, 255, 255, 0.5);
+        color: #4a5568;
+    }
+}
+
+/* Melhorias na scrollbar */
+.scroll-track {
+    background: rgba(74, 85, 104, 0.2) !important;
+    border-radius: 8px !important;
+    border: 1px solid rgba(255, 107, 53, 0.2) !important;
+}
+
+.scroll-thumb {
+    background: linear-gradient(135deg, #ff6b35 0%, #ff8c42 100%) !important;
+    border-radius: 6px !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3) !important;
+    transition: all 0.2s ease !important;
+    min-height: 40px !important;
+}
+
+.scroll-thumb:hover {
+    transform: scale(1.05) !important;
+    box-shadow: 0 4px 12px rgba(255, 107, 53, 0.5) !important;
+}
+
+.scroll-thumb:active {
+    transform: scale(1.1) !important;
+    box-shadow: 0 6px 16px rgba(255, 107, 53, 0.6) !important;
+}
+
+/* Indicador de posição */
+#scroll-position {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(26, 26, 46, 0.9);
+    color: #ffffff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: 'Courier New', monospace;
+    border: 1px solid rgba(255, 107, 53, 0.3);
+    z-index: 999;
+    backdrop-filter: blur(10px);
+}
+
+/* Tooltips para controles */
+#precision-controls .control-tooltip {
+    position: relative;
+}
+
+#precision-controls .control-tooltip::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: #ffffff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 1001;
+}
+
+#precision-controls .control-tooltip:hover::after {
+    opacity: 1;
+}

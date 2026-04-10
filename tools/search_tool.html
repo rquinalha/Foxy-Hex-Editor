@@ -1,0 +1,249 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="tool.search.title">Buscar e Substituir</title>
+    <style>
+        body {
+            background-color: #0f0f1e;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            box-sizing: border-box;
+            height: 100vh;
+            display: flex;
+        }
+
+        .search-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            height: 100%;
+            min-height: 0;
+            width: 100%;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .input-group label {
+            color: #ff6b35;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .search-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            padding: 10px;
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
+            box-sizing: border-box;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .search-input:focus {
+            border-color: #ff6b35;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .options-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .checkbox-group input {
+            cursor: pointer;
+        }
+
+        .actions-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 5px;
+            flex: 0 0 auto;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn.primary {
+            background: #ff6b35;
+            color: white;
+        }
+
+        .btn.primary:hover {
+            background: #ff8552;
+            transform: translateY(-1px);
+        }
+
+        .btn.success {
+            background: #2ecc71;
+            color: white;
+        }
+
+        .btn.success:hover {
+            background: #27ae60;
+            transform: translateY(-1px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .results-panel {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 12px;
+            min-height: 120px;
+            font-size: 13px;
+            color: #ffffff;
+            margin-top: 5px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            flex: 0 0 auto;
+        }
+
+        .results-scroll-region {
+            margin-top: 10px;
+            max-height: 292px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding-right: 6px;
+            flex: 0 0 auto;
+        }
+
+        .results-scroll-region::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        .results-scroll-region::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 999px;
+        }
+
+        .results-scroll-region::-webkit-scrollbar-thumb {
+            background: rgba(255, 107, 53, 0.6);
+            border-radius: 999px;
+        }
+
+        .results-scroll-region::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 107, 53, 0.8);
+        }
+
+        .search-match-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="search-container">
+        <div class="input-group">
+            <label for="find-input" data-i18n="tool.search.find_label">Buscar:</label>
+            <input type="text" id="find-input" class="search-input" data-i18n-placeholder="tool.search.find_placeholder" placeholder="Hex: FF AA BB ou Texto: HELLO" autofocus>
+        </div>
+
+        <div class="input-group">
+            <label for="replace-input" data-i18n="tool.search.replace_label">Substituir por:</label>
+            <input type="text" id="replace-input" class="search-input" data-i18n-placeholder="tool.search.replace_placeholder" placeholder="Hex: 00 11 22 ou Texto: WORLD">
+        </div>
+
+        <div class="options-group">
+            <label class="checkbox-group">
+                <input type="checkbox" id="case-sensitive">
+                <span data-i18n="tool.search.case_sensitive">Diferenciar MaiÃºsculas</span>
+            </label>
+            <label class="checkbox-group">
+                <input type="checkbox" id="regex-mode">
+                <span data-i18n="tool.search.regex">Regex</span>
+            </label>
+            <label class="checkbox-group">
+                <input type="checkbox" id="whole-word">
+                <span id="whole-word-label" data-i18n="tool.search.whole_word">Palavra Inteira</span>
+            </label>
+            <label class="checkbox-group">
+                <input type="checkbox" id="replace-all">
+                <span data-i18n="tool.search.replace_all">Substituir Todos</span>
+            </label>
+            <label class="checkbox-group">
+                <input type="checkbox" id="search-all-tabs">
+                <span>Buscar em todas as abas</span>
+            </label>
+        </div>
+
+        <div class="results-panel" id="results-display" data-i18n="tool.search.no_results">
+            Nenhum arquivo aberto ou busca nÃ£o iniciada.
+        </div>
+
+        <div class="actions-group">
+            <div class="button-row">
+                <button class="btn primary" id="find-btn" title="Enter">
+                    <span data-i18n="tool.search.search_btn">Buscar</span>
+                </button>
+                <button class="btn success" id="replace-btn">
+                    <span data-i18n="tool.search.replace_btn">Substituir</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/core/i18n.js"></script>
+    <script src="../js/tools/renderers/search_tool_renderer.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.I18n) {
+                I18n.loadSavedLanguage();
+                I18n.applyTranslations();
+            }
+        });
+    </script>
+</body>
+
+</html>
+
+

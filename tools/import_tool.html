@@ -1,0 +1,249 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Importar Selecao - Foxy Hex Editor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html, body {
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tool-header {
+            background: linear-gradient(135deg, rgba(255,107,53,0.1) 0%, rgba(247,147,30,0.1) 100%);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        .tool-header h2 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #ffffff;
+        }
+
+        .tool-header .icon { font-size: 20px; }
+
+        .tool-body {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 18px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            min-height: 0;
+        }
+
+        .tool-body::-webkit-scrollbar { width: 6px; }
+        .tool-body::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+        .tool-body::-webkit-scrollbar-thumb { background: rgba(255,107,53,0.4); border-radius: 3px; }
+
+        .info-card {
+            border-radius: 8px;
+            padding: 14px 16px;
+        }
+
+        .info-card.orange {
+            background: rgba(255,107,53,0.1);
+            border: 1px solid rgba(255,107,53,0.3);
+        }
+
+        .info-card.green {
+            background: rgba(68,217,145,0.1);
+            border: 1px solid rgba(68,217,145,0.3);
+        }
+
+        .info-card.yellow {
+            background: rgba(255,193,7,0.1);
+            border: 1px solid rgba(255,193,7,0.3);
+        }
+
+        .info-card h4 {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .info-card.orange h4 { color: #ff6b35; }
+        .info-card.green  h4 { color: #44d991; }
+        .info-card.yellow h4 { color: #ffc107; }
+
+        .info-card .info-row {
+            font-size: 12px;
+            color: #e0e0e0;
+            line-height: 1.6;
+        }
+
+        .info-card .info-row strong { color: #ffffff; }
+
+        .drop-zone-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 8px;
+        }
+
+        .drop-zone {
+            border: 2px dashed rgba(255,255,255,0.3);
+            border-radius: 8px;
+            padding: 22px 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: rgba(255,255,255,0.04);
+            user-select: none;
+        }
+
+        .drop-zone:hover,
+        .drop-zone.drag-over {
+            border-color: rgba(255,107,53,0.6);
+            background: rgba(255,107,53,0.08);
+        }
+
+        .drop-zone .drop-icon { font-size: 40px; margin-bottom: 8px; }
+        .drop-zone .drop-title { font-size: 13px; color: #ffffff; margin-bottom: 4px; }
+        .drop-zone .drop-sub   { font-size: 11px; color: #a0aec0; }
+
+        .checkbox-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            cursor: pointer;
+        }
+
+        .checkbox-row input[type="checkbox"] {
+            margin-top: 2px;
+            width: 15px;
+            height: 15px;
+            accent-color: #ff6b35;
+            flex-shrink: 0;
+            cursor: pointer;
+        }
+
+        .checkbox-label { font-size: 13px; color: #ffffff; line-height: 1.4; }
+        .checkbox-hint  { font-size: 11px; color: #a0aec0; margin-top: 4px; line-height: 1.4; }
+
+        .tool-footer {
+            background: rgba(0,0,0,0.2);
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding: 14px 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            flex-shrink: 0;
+        }
+
+        .btn {
+            padding: 10px 22px;
+            border: none;
+            border-radius: 7px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-cancel {
+            background: rgba(255,255,255,0.1);
+            color: #ffffff;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .btn-cancel:hover { background: rgba(255,255,255,0.2); }
+
+        .btn-import {
+            background: linear-gradient(135deg, #ff6b35, #f7931e);
+            color: white;
+            opacity: 0.45;
+            pointer-events: none;
+        }
+
+        .btn-import.enabled {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .btn-import.enabled:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 14px rgba(255,107,53,0.45);
+        }
+    </style>
+</head>
+<body>
+    <div class="tool-header">
+        <span class="icon">&#128194;</span>
+        <h2 id="header-title">Importar Selecao</h2>
+    </div>
+
+    <div class="tool-body">
+        <div class="info-card orange">
+            <h4 id="lbl-sel-info">&#128202; Informacoes da Selecao</h4>
+            <div class="info-row">
+                <div><strong id="lbl-sel-size">Tamanho da selecao:</strong> <span id="sel-size">-</span></div>
+                <div><strong id="lbl-sel-start">Posicao inicial:</strong> <span id="sel-start">-</span></div>
+                <div><strong id="lbl-sel-end">Posicao final:</strong> <span id="sel-end">-</span></div>
+            </div>
+        </div>
+
+        <div>
+            <div class="drop-zone-label" id="lbl-select-file">&#128193; Selecionar Arquivo para Importar</div>
+            <div class="drop-zone" id="drop-zone">
+                <div class="drop-icon">&#128194;</div>
+                <div class="drop-title" id="lbl-click-select">Clique para selecionar arquivo</div>
+                <div class="drop-sub" id="lbl-drag-drop">ou arraste e solte aqui</div>
+                <input type="file" id="file-input" accept=".bin,.dat,.hex" style="display:none">
+            </div>
+        </div>
+
+        <div class="info-card green" id="file-info" style="display:none">
+            <h4 id="lbl-file-info">&#128196; Informacoes do Arquivo</h4>
+            <div class="info-row" id="file-details"></div>
+        </div>
+
+        <div class="info-card yellow" id="import-warning" style="display:none">
+            <h4 id="lbl-warning">&#9888; Aviso</h4>
+            <div class="info-row" id="warning-message"></div>
+        </div>
+
+        <div>
+            <label class="checkbox-row">
+                <input type="checkbox" id="insertion-mode">
+                <div>
+                    <div class="checkbox-label" id="lbl-insert-mode">Modo Insercao (empurrar dados existentes)</div>
+                    <div class="checkbox-hint" id="lbl-insert-hint">
+                        Se marcado, substitui a selecao pelos dados importados e insere apenas o excedente sem apagar o resto do arquivo.
+                        Se nao marcado, os dados importados sobrescrevem apenas o trecho selecionado.
+                    </div>
+                </div>
+            </label>
+        </div>
+    </div>
+
+    <div class="tool-footer">
+        <button class="btn btn-import" id="import-btn" disabled>
+            <span>&#128194;</span> <span id="lbl-btn-import">Importar</span>
+        </button>
+        <button class="btn btn-cancel" id="cancel-btn">
+            <span>&#10005;</span> <span id="lbl-btn-cancel">Cancelar</span>
+        </button>
+    </div>
+
+    <script src="../js/core/i18n.js"></script>
+    <script src="../js/tools/renderers/import_tool_renderer.js"></script>
+</body>
+</html>

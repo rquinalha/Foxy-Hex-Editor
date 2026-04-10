@@ -1,0 +1,355 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="tool.highlights.title">Gerenciar MarcaÃ§Ãµes</title>
+    <link rel="stylesheet" href="../css/notifications.css">
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, rgba(26, 26, 46, 0.98) 0%, rgba(22, 33, 62, 0.98) 100%);
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            gap: 16px;
+        }
+
+        .header {
+            background: linear-gradient(135deg, rgba(255, 107, 53, 0.1) 0%, rgba(247, 147, 30, 0.1) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .header-title {
+            color: #ffffff;
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-count {
+            color: #a0aec0;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .search-box {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px 16px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .search-icon {
+            font-size: 16px;
+            color: #a0aec0;
+            flex-shrink: 0;
+        }
+
+        .search-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            padding: 10px 14px;
+            color: #ffffff;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .search-input:focus {
+            border-color: rgba(255, 107, 53, 0.5);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .search-input::placeholder {
+            color: #a0aec0;
+        }
+
+        .table-container {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            overflow: auto;
+            flex: 1;
+            min-height: 0;
+        }
+
+        table {
+            width: 100%;
+            min-width: 900px;
+            border-collapse: collapse;
+            color: #ffffff;
+            font-size: 13px;
+            table-layout: fixed;
+        }
+
+        thead {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        th {
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            color: #ff6b35;
+            white-space: nowrap;
+            background: inherit;
+        }
+
+        th:nth-child(1) { width: 15%; }
+        th:nth-child(2) { width: 15%; }
+        th:nth-child(3) { width: 12%; }
+        th:nth-child(4) { width: 38%; }
+        th:nth-child(5) { width: 20%; text-align: center; }
+
+        tbody tr {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        tbody tr:hover {
+            background: rgba(255, 107, 53, 0.1);
+        }
+
+        tbody tr.hidden {
+            display: none;
+        }
+
+        td {
+            padding: 12px 16px;
+            white-space: nowrap;
+        }
+
+        td.offset {
+            font-family: 'Courier New', monospace;
+            color: #ff6b35;
+        }
+
+        td.size {
+            text-align: center;
+            color: #a0aec0;
+        }
+
+        td.actions {
+            text-align: center;
+        }
+
+        .comment-input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: #ffffff;
+            font-size: 13px;
+            outline: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .comment-input:focus {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-delete {
+            background: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
+            border-color: rgba(231, 76, 60, 0.3);
+        }
+
+        .btn-delete:hover {
+            background: rgba(231, 76, 60, 0.3);
+        }
+
+        .btn-navigate {
+            background: rgba(39, 174, 96, 0.2);
+            color: #27ae60;
+            border-color: rgba(39, 174, 96, 0.3);
+            margin-right: 8px;
+        }
+
+        .btn-navigate:hover {
+            background: rgba(39, 174, 96, 0.3);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #a0aec0;
+            font-size: 16px;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+
+        .empty-state-subtitle {
+            font-size: 14px;
+            margin-top: 10px;
+            color: #718096;
+        }
+
+        .footer {
+            background: rgba(0, 0, 0, 0.2);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 16px 20px;
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            flex-shrink: 0;
+            border-radius: 8px;
+        }
+
+        .btn-close {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 10px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-refresh {
+            background: rgba(255, 107, 53, 0.2);
+            color: #ff6b35;
+            border: 1px solid rgba(255, 107, 53, 0.3);
+            padding: 10px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-refresh:hover {
+            background: rgba(255, 107, 53, 0.3);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 107, 53, 0.3);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 107, 53, 0.5);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h3 class="header-title" data-i18n="tool.highlights.header" data-i18n-html>ðŸ–ï¸ Gerenciar MarcaÃ§Ãµes</h3>
+            <div class="header-count" id="highlights-count" data-i18n="tool.highlights.count" data-i18n-count>(0 marcaÃ§Ãµes)</div>
+        </div>
+
+        <div class="search-box">
+            <div class="search-icon">&#x1F50D;</div>
+            <input type="text" id="search-input" class="search-input" data-i18n-placeholder="tool.highlights.search_placeholder" placeholder="Buscar por offset ou comentÃ¡rio...">
+        </div>
+
+        <div class="table-container" id="table-container">
+            <table id="highlights-table">
+                <thead>
+                    <tr>
+                        <th data-i18n="tool.highlights.start_offset">Offset Inicial</th>
+                        <th data-i18n="tool.highlights.end_offset">Offset Final</th>
+                        <th data-i18n="tool.highlights.size">Tamanho</th>
+                        <th data-i18n="tool.highlights.comment">ComentÃ¡rio</th>
+                        <th data-i18n="tool.highlights.actions">AÃ§Ãµes</th>
+                    </tr>
+                </thead>
+                <tbody id="highlights-table-body">
+                    <!-- MarcaÃ§Ãµes serÃ£o inseridas aqui -->
+                </tbody>
+            </table>
+        </div>
+
+        <div class="footer">
+            <button class="btn-refresh" id="refresh-btn" data-i18n="tool.highlights.refresh" data-i18n-html>ðŸ”„ Atualizar</button>
+            <button class="btn-close" id="close-btn" data-i18n="tool.highlights.close">Fechar</button>
+        </div>
+    </div>
+
+    <script src="../js/core/i18n.js"></script>
+    <script src="../js/features/ui/notification_system.js"></script>
+    <script src="../js/tools/renderers/highlights_tool_renderer.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.I18n) {
+                I18n.loadSavedLanguage();
+                I18n.applyTranslations();
+            }
+        });
+    </script>
+</body>
+
+</html>
+

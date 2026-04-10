@@ -1,0 +1,752 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="tool.color.title" data-i18n-html>Customizar</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/notifications.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0f0f1e;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: #0f0f1e !important;
+            color: #ff6b35 !important;
+            padding: 8px 20px !important;
+            font-size: 16px !important;
+            font-weight: 600 !important;
+            text-align: center !important;
+            flex-shrink: 0 !important;
+            border-bottom: 1px solid rgba(255, 107, 53, 0.3) !important;
+            min-height: auto !important;
+            display: block !important;
+        }
+
+        .header h3 {
+            margin: 0;
+            font-size: 16px;
+        }
+
+        .modal-tabs {
+            display: flex;
+            gap: 4px;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.03);
+            border-bottom: 1px solid rgba(255, 107, 53, 0.2);
+            flex-shrink: 0;
+            overflow-x: auto;
+        }
+
+        .tab-btn {
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            color: #ffffff;
+            cursor: pointer;
+            font-size: 13px;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+
+        .tab-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .tab-btn.active {
+            background: linear-gradient(135deg, #ff6b35 0%, #ee5a24 100%);
+            color: white;
+        }
+
+        .tab-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        .color-section {
+            margin-bottom: 20px;
+        }
+
+        .color-section h4 {
+            color: #ff6b35;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.03);
+            border-top: 1px solid rgba(255, 107, 53, 0.2);
+            flex-shrink: 0;
+        }
+
+        .actions button {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .actions button:not(.primary-btn) {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+        }
+
+        .actions button:not(.primary-btn):hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .primary-btn {
+            background: linear-gradient(135deg, #ff6b35 0%, #ee5a24 100%);
+            color: white;
+        }
+
+        .primary-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(255, 107, 53, 0.4);
+        }
+
+        /* Custom Select Dropdown */
+        .font-item {
+            margin-bottom: 16px;
+        }
+
+        .font-item label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            color: #a0a9c0;
+            font-size: 13px;
+        }
+
+        .size-badge {
+            background: linear-gradient(135deg, #ff6b35, #f7931e);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .custom-select-wrapper {
+            position: relative;
+            display: inline-block;
+            width: auto;
+        }
+
+        .custom-select {
+            padding: 10px 36px 10px 12px;
+            background: rgba(26, 26, 46, 0.9);
+            border: 1px solid rgba(255, 107, 53, 0.3);
+            border-radius: 6px;
+            color: #ffffff;
+            font-size: 13px;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            transition: all 0.2s ease;
+            width: auto;
+            min-width: 180px;
+            white-space: nowrap;
+        }
+
+        .custom-select:hover {
+            background: rgba(26, 26, 46, 1);
+            border-color: rgba(255, 107, 53, 0.5);
+            box-shadow: 0 0 10px rgba(255, 107, 53, 0.2);
+        }
+
+        .custom-select:focus {
+            outline: none;
+            border-color: #ff6b35;
+            box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.3);
+        }
+
+        .custom-select option {
+            background: rgba(26, 26, 46, 0.95);
+            color: #ffffff;
+            padding: 8px;
+        }
+
+        .select-arrow {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #ff6b35;
+            font-size: 12px;
+            pointer-events: none;
+            transition: transform 0.2s ease;
+        }
+
+        .custom-select-wrapper:hover .select-arrow {
+            transform: translateY(-50%) rotate(180deg);
+        }
+
+        /* Font Slider */
+        .slider-container {
+            padding: 8px 0;
+        }
+
+        .font-slider {
+            width: 100%;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .font-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: linear-gradient(135deg, #ff6b35, #f7931e);
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 2px 8px rgba(255, 107, 53, 0.4);
+            transition: all 0.2s ease;
+        }
+
+        .font-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+            box-shadow: 0 4px 12px rgba(255, 107, 53, 0.6);
+        }
+
+        .font-slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: linear-gradient(135deg, #ff6b35, #f7931e);
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 2px 8px rgba(255, 107, 53, 0.4);
+        }
+
+        .font-size-display {
+            text-align: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: #ff6b35;
+            margin-top: 8px;
+            text-shadow: 0 0 8px rgba(255, 107, 53, 0.4);
+        }
+
+        /* Font Preview Box */
+        .font-preview-box {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 107, 53, 0.2);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .font-preview {
+            margin-top: 10px;
+            padding: 12px;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 15px;
+            color: #4fc3f7;
+            text-align: center;
+        }
+
+        .font-note {
+            margin-top: 12px;
+            font-size: 11px;
+            color: #a0a9c0;
+            font-style: italic;
+        }
+
+        .reset-font-btn {
+            margin-top: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .reset-font-btn:hover {
+            background: rgba(255, 107, 53, 0.3);
+            border-color: #ff6b35;
+        }
+
+        .offset-color-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body class="color-customization-tool-page">
+    <div class="header" data-i18n="tool.color.header" data-i18n-html>
+        CustomizaÃ§Ã£o
+    </div>
+
+            <div class="modal-tabs">
+                <button class="tab-btn active" data-tab="hex" onclick="ColorTool.switchTab('hex')" data-i18n="tool.color.tab.hex" data-i18n-html>&#x1F522; Hex</button>
+                <button class="tab-btn" data-tab="offset" onclick="ColorTool.switchTab('offset')" data-i18n-html># Offset</button>
+                <button class="tab-btn" data-tab="text" onclick="ColorTool.switchTab('text')" data-i18n="tool.color.tab.text" data-i18n-html>&#x1F4DD; Textos</button>
+                <button class="tab-btn" data-tab="background" onclick="ColorTool.switchTab('background')" data-i18n="tool.color.tab.background" data-i18n-html>&#x1F3A8; Fundo</button>
+                <button class="tab-btn" data-tab="font" onclick="ColorTool.switchTab('font')" data-i18n="tool.color.tab.font" data-i18n-html>&#x1F521; Fonte</button>
+                <button class="tab-btn" data-tab="highlights" onclick="ColorTool.switchTab('highlights')" data-i18n="tool.color.tab.highlights" data-i18n-html>&#x1F58D;&#xFE0F; MarcaÃ§Ãµes</button>
+                <button class="tab-btn" data-tab="presets" onclick="ColorTool.switchTab('presets')" data-i18n="tool.color.tab.presets" data-i18n-html>&#x1F4BE; Presets</button>
+            </div>
+
+            <div class="tab-content">
+                <!-- Tab Bytes Hex -->
+                <div id="hex-tab" class="tab-panel active">
+                    <div class="color-section color-section--hex-types">
+                        <h4 data-i18n="tool.color.hex.colors_by_type" data-i18n-html>&#x1F522; Colors by Type</h4>
+                        <div class="color-type-grid" style="grid-template-columns: repeat(3, 1fr) !important;">
+                            <div class="color-item">
+                                <label data-i18n="tool.color.hex.numbers">Numbers (0-9):</label>
+                                <div class="color-row">
+                                    <input type="color" id="hex-numbers-color" value="#ffffff"
+                                        onchange="ColorTool.exec('updateHexColor', ['numbers', this.value])">
+                                    <span class="color-preview" id="hex-numbers-preview">47</span>
+                                    <button class="reset-btn" onclick="ColorTool.exec('resetHexColor', ['numbers'])" data-i18n="tool.color.reset" data-i18n-html>&#x1F504; Reset</button>
+                                </div>
+                            </div>
+                            <div class="color-item">
+                                <label data-i18n="tool.color.hex.letters">Letters (A-F):</label>
+                                <div class="color-row">
+                                    <input type="color" id="hex-letters-color" value="#ffffff"
+                                        onchange="ColorTool.exec('updateHexColor', ['letters', this.value])">
+                                    <span class="color-preview" id="hex-letters-preview">AB</span>
+                                    <button class="reset-btn" onclick="ColorTool.exec('resetHexColor', ['letters'])" data-i18n="tool.color.reset" data-i18n-html>&#x1F504; Reset</button>
+                                </div>
+                            </div>
+                            <div class="color-item">
+                                <label data-i18n="tool.color.hex.special">Special:</label>
+                                <div class="color-row">
+                                    <input type="color" id="hex-special-color" value="#ffffff"
+                                        onchange="ColorTool.exec('updateHexColor', ['special', this.value])">
+                                    <span class="color-preview" id="hex-special-preview">20</span>
+                                    <button class="reset-btn" onclick="ColorTool.exec('resetHexColor', ['special'])" data-i18n="tool.color.reset" data-i18n-html>&#x1F504; Reset</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="color-section">
+                        <h4 data-i18n="tool.color.hex.custom" data-i18n-html>&#x1F3AF; Hex Customizados</h4>
+                        <div id="custom-hex-list" style="max-height: 200px; overflow-y: auto;">
+                            <!-- Hex customizados serÃ£o adicionados aqui -->
+                        </div>
+                        <div class="add-custom-hex">
+                            <input type="text" id="custom-hex-input" placeholder="00" maxlength="2"
+                                pattern="[0-9A-Fa-f]{2}">
+                            <input type="color" id="custom-hex-color" value="#ff6b35">
+                            <button onclick="ColorTool.addCustomHex()" data-i18n="tool.color.add" data-i18n-html>&#x2795; Adicionar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="offset-tab" class="tab-panel">
+                    <div class="color-section">
+                        <h4 data-i18n-html># Cor do Offset</h4>
+                        <div class="color-item">
+                            <label>Offset do arquivo aberto:</label>
+                            <div class="color-row offset-color-row">
+                                <input type="color" id="offset-color" value="#ffd700"
+                                    onchange="ColorTool.exec('updateOffsetColor', [this.value])">
+                                <button class="reset-btn" onclick="ColorTool.exec('resetOffsetColor', [])" data-i18n="tool.color.reset" data-i18n-html>&#x1F504; Reset</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab Texto Decodificado -->
+                <div id="text-tab" class="tab-panel">
+                    <div class="color-section color-section--text-types">
+                        <h4 data-i18n="tool.color.text.title" data-i18n-html>&#x1F4DD; Cores do Texto</h4>
+                        <div class="color-type-grid">
+                            <div class="color-item">
+                                <label data-i18n="tool.color.text.numbers">NÃºmeros:</label>
+                                <div class="color-row">
+                                    <input type="color" id="text-numbers-color" value="#2196F3"
+                                        onchange="ColorTool.exec('updateTextColor', ['numbers', this.value])">
+                                    <span class="color-preview" id="text-numbers-preview">123</span>
+                                    <button class="reset-btn" onclick="ColorTool.exec('resetTextColor', ['numbers'])" data-i18n="tool.color.reset" data-i18n-html>&#x1F504; Reset</button>
+                                </div>
+                            </div>
+                            <div class="color-item">
+                                <label data-i18n="tool.color.text.letters">Letras:</label>
+                                <div class="color-row">
+                                    <input type="color" id="text-letters-color" value="#ffffff"
+                                        onchange="ColorTool.exec('updateTextColor', ['letters', this.value])">
+                                    <span class="color-preview" id="text-letters-preview">ABC</span>
+                                    <button class="reset-btn" onclick="ColorTool.exec('resetTextColor', ['letters'])" data-i18n="tool.color.reset" data-i18n-html>&#x1F504; Reset</button>
+                                </div>
+                            </div>
+                            <div class="color-item">
+                                <label data-i18n="tool.color.text.punctuation">PontuaÃ§Ã£o:</label>
+                                <div class="color-row">
+                                    <input type="color" id="text-punctuation-color" value="#ffd700"
+                                        onchange="ColorTool.exec('updateTextColor', ['punctuation', this.value])">
+                                    <span class="color-preview" id="text-punctuation-preview">.,!?</span>
+                                    <button class="reset-btn" onclick="ColorTool.exec('resetTextColor', ['punctuation'])" data-i18n="tool.color.reset" data-i18n-html>&#x1F504; Reset</button>
+                                </div>
+                            </div>
+                            <div class="color-item">
+                                <label data-i18n="tool.color.text.spaces">EspaÃ§os:</label>
+                                <div class="color-row">
+                                    <input type="color" id="text-spaces-color" value="#666666"
+                                        onchange="ColorTool.exec('updateTextColor', ['spaces', this.value])">
+                                    <span class="color-preview" id="text-spaces-preview">_</span>
+                                    <button class="reset-btn" onclick="ColorTool.exec('resetTextColor', ['spaces'])" data-i18n="tool.color.reset" data-i18n-html>&#x1F504; Reset</button>
+                                </div>
+                            </div>
+                            <div class="color-item">
+                                <label data-i18n="tool.color.text.tags">Tags:</label>
+                                <div class="color-row">
+                                    <input type="color" id="text-tags-color" value="#9C27B0"
+                                        onchange="ColorTool.exec('updateTextColor', ['tags', this.value])">
+                                    <span class="color-preview" id="text-tags-preview">&lt;TAG&gt;</span>
+                                    <button class="reset-btn" onclick="ColorTool.exec('resetTextColor', ['tags'])" data-i18n="tool.color.reset" data-i18n-html>&#x1F504; Reset</button>
+                                </div>
+                            </div>
+                            <div class="color-item">
+                                <label data-i18n="tool.color.text.dte">DTE:</label>
+                                <div class="color-row">
+                                    <input type="color" id="text-dte-color" value="#9C27B0"
+                                        onchange="ColorTool.exec('updateTextColor', ['dte', this.value])">
+                                    <span class="color-preview" id="text-dte-preview">TH</span>
+                                    <button class="reset-btn" onclick="ColorTool.exec('resetTextColor', ['dte'])" data-i18n="tool.color.reset" data-i18n-html>&#x1F504; Reset</button>
+                                </div>
+                            </div>
+                            <div class="color-item">
+                                <label data-i18n="tool.color.text.mte">MTE:</label>
+                                <div class="color-row">
+                                    <input type="color" id="text-mte-color" value="#E91E63"
+                                        onchange="ColorTool.exec('updateTextColor', ['mte', this.value])">
+                                    <span class="color-preview" id="text-mte-preview">THE</span>
+                                    <button class="reset-btn" onclick="ColorTool.exec('resetTextColor', ['mte'])" data-i18n="tool.color.reset" data-i18n-html>&#x1F504; Reset</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab Fonte -->
+                <div id="font-tab" class="tab-panel">
+                    <div class="color-section">
+                        <h4 data-i18n="tool.color.font.title" data-i18n-html>&#x1F521; Fonte do Editor</h4>
+                        <div class="config-actions" style="margin-bottom: 16px;">
+                            <div class="color-item font-item">
+                                <label data-i18n="tool.color.font.family">Fonte:</label>
+                                <div class="custom-select-wrapper">
+                                    <select id="editor-font-family" class="custom-select" onchange="ColorTool.exec('updateEditorFontFamily', [this.value]); updateFontPreview(this.value, document.getElementById('editor-font-size').value);">
+                                        <option value="jetbrains-mono">JetBrains Mono</option>
+                                        <option value="source-code-pro">Source Code Pro</option>
+                                        <option value="arimo">Arimo</option>
+                                        <option value="roboto">Roboto</option>
+                                        <option value="system-mono">System Mono</option>
+                                    </select>
+                                    <span class="select-arrow">&#x25bc;</span>
+                                </div>
+                            </div>
+                            <div class="color-item font-item">
+                                <label data-i18n="tool.color.font.size">Tamanho:</label>
+                                <div class="slider-container">
+                                    <input type="range" id="editor-font-size" class="font-slider" min="12" max="18" step="1" value="15" 
+                                           oninput="updateFontSizeValue(this.value); updateFontPreview(document.getElementById('editor-font-family').value, this.value);"
+                                           onchange="ColorTool.exec('updateEditorFontSize', [this.value]);">
+                                    <div id="font-size-display" class="font-size-display">15px</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="info-box font-preview-box">
+                            <p><strong data-i18n="tool.color.font.preview">PrÃ©-visualizaÃ§Ã£o</strong></p>
+                            <div id="font-preview-sample" class="font-preview" data-i18n="tool.color.font.sample">00 1A 2F AB | Texto Exemplo | ã‚ã‚¢äºœ</div>
+                            <p class="font-note" data-i18n="tool.color.font.note">O tamanho Ã© limitado para nÃ£o prejudicar o viewport.</p>
+                            <button class="reset-font-btn" onclick="ColorTool.exec('resetEditorFont', []); resetFontUI();" data-i18n="tool.color.font.reset">&#x1F504; Resetar Fonte</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab Fundo -->
+                <div id="background-tab" class="tab-panel">
+                    <div class="color-section">
+                        <h4 data-i18n="tool.color.bg.title" data-i18n-html style="text-align: center;">&#x1F3A8; Cores de Fundo</h4>
+                        <div class="color-item">
+                            <label data-i18n="tool.color.bg.hex_content" style="display: block; text-align: center;">Fundo do ConteÃºdo:</label>
+                            <input type="color" id="bg-hex-content-color" value="#1a1a2e"
+                                onchange="ColorTool.exec('updateBackgroundColor', ['hexContent', this.value])">
+                            <span class="color-preview" id="bg-hex-content-preview" data-i18n="tool.color.bg.preview">Fundo</span>
+                            <button class="reset-btn" onclick="ColorTool.exec('resetBackgroundColor', ['hexContent'])" data-i18n="tool.color.reset" data-i18n-html>&#x1F504; Reset</button>
+                        </div>
+                    </div>
+
+                    <div class="color-section">
+                        <h4 data-i18n="tool.color.bg.quick_presets" data-i18n-html>&#x26A1; Presets RÃ¡pidos de Fundo</h4>
+                        <div class="preset-grid">
+                            <div class="preset-item" onclick="ColorTool.exec('loadBackgroundOnlyPreset', ['light-theme'])">
+                                <div class="preset-preview light-theme-preview"></div>
+                                <span data-i18n="tool.color.preset.light">Tema Claro</span>
+                            </div>
+                            <div class="preset-item" onclick="ColorTool.exec('loadBackgroundOnlyPreset', ['terminal-green'])">
+                                <div class="preset-preview terminal-green-preview"></div>
+                                <span data-i18n="tool.color.preset.terminal">Terminal Verde</span>
+                            </div>
+                            <div class="preset-item" onclick="ColorTool.exec('loadBackgroundOnlyPreset', ['black'])">
+                                <div class="preset-preview black-preview"></div>
+                                <span data-i18n="tool.color.preset.black">Black</span>
+                            </div>
+                            <div class="preset-item" onclick="ColorTool.exec('loadBackgroundOnlyPreset', ['dark'])">
+                                <div class="preset-preview dark-preview"></div>
+                                <span data-i18n="tool.color.preset.dark">Escuro</span>
+                            </div>
+                            <div class="preset-item" onclick="ColorTool.exec('loadBackgroundOnlyPreset', ['colorful'])">
+                                <div class="preset-preview colorful-preview"></div>
+                                <span data-i18n="tool.color.preset.colorful">Colorido</span>
+                            </div>
+                            <div class="preset-item" onclick="ColorTool.exec('loadBackgroundOnlyPreset', ['classic-blue'])">
+                                <div class="preset-preview classic-blue-preview"></div>
+                                <span data-i18n="tool.color.preset.classic_blue">Azul ClÃ¡ssico</span>
+                            </div>
+                            <div class="preset-item" onclick="ColorTool.exec('loadBackgroundOnlyPreset', ['soft-gray'])">
+                                <div class="preset-preview soft-gray-preview"></div>
+                                <span data-i18n="tool.color.preset.soft_gray">Cinza Suave</span>
+                            </div>
+                            <div class="preset-item" onclick="ColorTool.exec('loadBackgroundOnlyPreset', ['midnight-purple'])">
+                                <div class="preset-preview midnight-purple-preview"></div>
+                                <span data-i18n="tool.color.preset.midnight_purple">Roxo Meia-noite</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab MarcaÃ§Ãµes -->
+                <div id="highlights-tab" class="tab-panel">
+                    <div class="color-section color-section--highlight-types">
+                        <h4 data-i18n="tool.color.highlight.title" data-i18n-html>&#x1F58D;&#xFE0F; Cores das MarcaÃ§Ãµes</h4>
+                        <div class="highlight-color-options color-type-grid" style="display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 12px;">
+                            <div class="color-option" data-color="default"
+                                onclick="ColorTool.exec('selectHighlightColor', ['default'])">
+                                <div class="color-preview"
+                                    style="background: linear-gradient(135deg, rgba(0, 191, 255, 0.7), rgba(30, 144, 255, 0.7)); border: 2px solid #00bfff;">
+                                    &#x1F58D;&#xFE0F;</div>
+                                <span data-i18n="tool.color.highlight.default">PadrÃ£o (Azul)</span>
+                            </div>
+                            <div class="color-option" data-color="red"
+                                onclick="ColorTool.exec('selectHighlightColor', ['red'])">
+                                <div class="color-preview"
+                                    style="background: linear-gradient(135deg, rgba(255, 0, 0, 0.7), rgba(220, 20, 60, 0.7)); border: 2px solid #ff0000;">
+                                    &#x1F58D;&#xFE0F;</div>
+                                <span data-i18n="tool.color.highlight.red">Vermelha</span>
+                            </div>
+                            <div class="color-option" data-color="green"
+                                onclick="ColorTool.exec('selectHighlightColor', ['green'])">
+                                <div class="color-preview"
+                                    style="background: linear-gradient(135deg, rgba(0, 255, 0, 0.7), rgba(34, 139, 34, 0.7)); border: 2px solid #00ff00;">
+                                    &#x1F58D;&#xFE0F;</div>
+                                <span data-i18n="tool.color.highlight.green">Verde</span>
+                            </div>
+                            <div class="color-option" data-color="purple"
+                                onclick="ColorTool.exec('selectHighlightColor', ['purple'])">
+                                <div class="color-preview"
+                                    style="background: linear-gradient(135deg, rgba(128, 0, 128, 0.7), rgba(75, 0, 130, 0.7)); border: 2px solid #800080;">
+                                    &#x1F58D;&#xFE0F;</div>
+                                <span data-i18n="tool.color.highlight.purple">Roxa</span>
+                            </div>
+                            <div class="color-option" data-color="orange"
+                                onclick="ColorTool.exec('selectHighlightColor', ['orange'])">
+                                <div class="color-preview"
+                                    style="background: linear-gradient(135deg, rgba(255, 165, 0, 0.7), rgba(255, 69, 0, 0.7)); border: 2px solid #ffa500;">
+                                    &#x1F58D;&#xFE0F;</div>
+                                <span data-i18n="tool.color.highlight.orange">Laranja</span>
+                            </div>
+                            <div class="color-option" data-color="pink"
+                                onclick="ColorTool.exec('selectHighlightColor', ['pink'])">
+                                <div class="color-preview"
+                                    style="background: linear-gradient(135deg, rgba(255, 192, 203, 0.7), rgba(255, 20, 147, 0.7)); border: 2px solid #ffc0cb;">
+                                    &#x1F58D;&#xFE0F;</div>
+                                <span data-i18n="tool.color.highlight.pink">Rosa</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="color-section color-section--highlight-info">
+                        <h4 data-i18n="tool.color.highlight.info_title" data-i18n-html>&#x2139;&#xFE0F; InformaÃ§Ãµes</h4>
+                        <div class="info-box">
+                            <p data-i18n-html>ðŸŽ¯ <strong data-i18n="tool.color.highlight.how_to_use">Como usar:</strong></p>
+                            <ul>
+                                <li><span data-i18n="tool.color.highlight.step1">Selecione uma Ã¡rea no editor (HEX ou ASCII)</span></li>
+                                <li data-i18n-html>ðŸ–ï¸ <span data-i18n="tool.color.highlight.step2">Clique com o botÃ£o direito e escolha "ðŸ–ï¸ Criar MarcaÃ§Ã£o"</span></li>
+                                <li><span data-i18n="tool.color.highlight.step3">A cor selecionada serÃ¡ aplicada a todas as marcaÃ§Ãµes</span></li>
+                                <li><span data-i18n="tool.color.highlight.step4">As marcaÃ§Ãµes sÃ£o persistentes e salvas automaticamente</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab Presets -->
+                <div id="presets-tab" class="tab-panel">
+                    <div class="color-section color-section--presets-row">
+                        <h4 data-i18n="tool.color.presets.title" data-i18n-html>&#x1F4BE; Presets</h4>
+                        <div class="preset-grid preset-grid--single-row">
+                            <div class="preset-item" onclick="ColorTool.exec('loadPreset', ['default'])">
+                                <div class="preset-preview default-preview"></div>
+                                <span data-i18n="tool.color.preset.default_name">PadrÃ£o</span>
+                            </div>
+                            <div class="preset-item" onclick="ColorTool.exec('loadPreset', ['black'])">
+                                <div class="preset-preview black-preview"></div>
+                                <span data-i18n="tool.color.preset.black_name">Black</span>
+                            </div>
+                            <div class="preset-item" onclick="ColorTool.exec('loadPreset', ['terminal-green'])">
+                                <div class="preset-preview terminal-green-preview"></div>
+                                <span data-i18n="tool.color.preset.terminal">Verde (Matrix)</span>
+                            </div>
+                            <div class="preset-item" onclick="ColorTool.exec('loadPreset', ['colorful'])">
+                                <div class="preset-preview colorful-preview"></div>
+                                <span data-i18n="tool.color.preset.colorful">Colorido</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="color-section">
+                        <h4 data-i18n="tool.color.manage.title" data-i18n-html>&#x1F4BE; Gerenciar ConfiguraÃ§Ãµes</h4>
+                        <div class="config-actions">
+                            <button onclick="ColorTool.exec('saveCustomPreset', [])" data-i18n="tool.color.save" data-i18n-html>&#x1F4BE; Salvar</button>
+                            <button onclick="ColorTool.exec('exportColorConfig', [])" data-i18n="tool.color.export" data-i18n-html>&#x1F4E4; Exportar</button>
+                            <button onclick="ColorTool.exec('importColorConfig', [])" data-i18n="tool.color.import" data-i18n-html>&#x1F4E5; Importar</button>
+                            <button onclick="ColorTool.confirmResetAllColors()" class="danger-btn" data-i18n="tool.color.reset_all" data-i18n-html>&#x1F5D1;&#xFE0F; Resetar Tudo</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="actions">
+                <button onclick="ColorTool.exec('applyColorChanges', [])" class="primary-btn" data-i18n="tool.color.apply" data-i18n-html>&#x2705; Aplicar</button>
+                <button onclick="ColorTool.close()" data-i18n="tool.color.cancel" data-i18n-html>&#x274C; Cancelar</button>
+            </div>
+
+<script src="../js/core/i18n.js"></script>
+<script src="../js/features/ui/notification_system.js"></script>
+<script src="../js/tools/shared/color_tool_ui_shared.js"></script>
+<script src="../js/tools/renderers/color_customization_tool_renderer.js"></script>
+<script>
+    // Font preview update function
+    function updateFontPreview(family, size) {
+        const preview = document.getElementById('font-preview-sample');
+        if (!preview) return;
+        
+        const fontMap = {
+            'jetbrains-mono': '"JetBrains Mono Local", "JetBrains Mono", monospace',
+            'source-code-pro': '"Source Code Pro Local", "Source Code Pro", monospace',
+            'arimo': '"Arimo Local", Arimo, sans-serif',
+            'roboto': '"Roboto Local", Roboto, sans-serif',
+            'system-mono': 'Consolas, "Cascadia Mono", "Courier New", monospace'
+        };
+        
+        preview.style.fontFamily = fontMap[family] || fontMap['jetbrains-mono'];
+        preview.style.fontSize = size + 'px';
+    }
+    
+    // Update font size display
+    function updateFontSizeValue(value) {
+        const display = document.getElementById('font-size-display');
+        if (display) display.textContent = value + 'px';
+    }
+    
+    // Setup mouse wheel for font slider
+    function setupFontSliderWheel() {
+        const slider = document.getElementById('editor-font-size');
+        if (!slider) return;
+        
+        slider.addEventListener('wheel', function(e) {
+            e.preventDefault();
+            const currentValue = parseInt(this.value);
+            const min = parseInt(this.min);
+            const max = parseInt(this.max);
+            
+            if (e.deltaY < 0 && currentValue < max) {
+                this.value = currentValue + 1;
+            } else if (e.deltaY > 0 && currentValue > min) {
+                this.value = currentValue - 1;
+            }
+            
+            updateFontSizeValue(this.value);
+            updateFontPreview(document.getElementById('editor-font-family').value, this.value);
+            ColorTool.exec('updateEditorFontSize', [this.value]);
+        }, { passive: false });
+    }
+    
+    // Reset font UI function
+    function resetFontUI() {
+        const fontSelect = document.getElementById('editor-font-family');
+        const sizeSlider = document.getElementById('editor-font-size');
+        
+        if (fontSelect) fontSelect.value = 'jetbrains-mono';
+        if (sizeSlider) sizeSlider.value = 15;
+        
+        updateFontSizeValue(15);
+        updateFontPreview('jetbrains-mono', 15);
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        if (window.I18n) {
+            I18n.loadSavedLanguage();
+            I18n.applyTranslations();
+        }
+        
+        // Initialize font preview
+        const fontSelect = document.getElementById('editor-font-family');
+        const sizeSlider = document.getElementById('editor-font-size');
+        if (fontSelect && sizeSlider) {
+            updateFontPreview(fontSelect.value, sizeSlider.value);
+        }
+        
+        // Setup mouse wheel for slider
+        setupFontSliderWheel();
+    });
+</script>
+</body>
+</html>
+

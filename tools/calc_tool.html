@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="tool.calc.title">Calculadora Hexadecimal</title>
+    <style>
+        body {
+            background-color: #0f0f1e;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden; /* Proibir scroll na janela principal */
+            height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .calc-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px; /* Reduzido de 12px */
+            max-width: 400px;
+            margin: 0 auto;
+            height: 100%;
+        }
+
+        /* Reutilizando estilos do app principal para consistÃªncia */
+        #hex-calc-display {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            padding: 12px;
+            text-align: right;
+            font-family: 'Courier New', monospace;
+            font-size: 18px;
+            color: #ff6b35;
+            min-height: 48px;
+            width: 100%;
+            box-sizing: border-box;
+            outline: none;
+        }
+
+        #hex-calc-history {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            padding: 6px 8px;
+            text-align: right;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #a0a9c0;
+            min-height: 24px;
+            line-height: 1.2;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+        }
+
+        .calc-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+        }
+
+        .hex-calc-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            padding: 14px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            text-align: center;
+            outline: none;
+        }
+
+        .hex-calc-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .hex-calc-btn:active {
+            transform: translateY(0px);
+        }
+
+        .hex-calc-btn.hex-calc-operator {
+            background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+            border-color: rgba(74, 144, 226, 0.5);
+        }
+
+        .hex-calc-btn.hex-calc-equals {
+            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+            border-color: rgba(39, 174, 96, 0.5);
+        }
+
+        .hex-calc-btn.hex-calc-backspace {
+            background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+        }
+
+        .hex-calc-btn.hex-calc-digit {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .hex-calc-btn.hex-calc-letter {
+            background: rgba(255, 107, 53, 0.15); /* Cor levemente diferente (laranja suave) */
+            border-color: rgba(255, 107, 53, 0.2);
+        }
+
+        .hex-calc-btn.hex-calc-letter:hover {
+            background: rgba(255, 107, 53, 0.25);
+            border-color: rgba(255, 107, 53, 0.4);
+        }
+
+        .actions-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .btn {
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .section-title {
+            font-size: 12px;
+            color: #ff6b35;
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+
+        .history-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0; /* Importante para flex scrollable */
+            margin-top: 4px;
+        }
+
+        #hex-calc-history-list {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            padding: 10px;
+            flex: 1;
+            min-height: 110px; /* Garante que pelo menos 2 resultados apareÃ§am antes do scroll */
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+        }
+
+        #hex-calc-mode-indicator {
+            background: #ff6b35;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+            min-width: 30px;
+            text-align: center;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 107, 53, 0.3); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 107, 53, 0.5); }
+    </style>
+    <link rel="stylesheet" href="../css/notifications.css">
+    <style>
+        /* Ajuste para caber na janela pequena da calculadora */
+        .notification-modal {
+            min-width: 320px !important;
+            max-width: 95vw !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="calc-container">
+        <!-- Partes EstÃ¡ticas (nÃ£o scrollam) -->
+        <div class="static-parts" style="display: flex; flex-direction: column; gap: 12px; flex-shrink: 0;">
+            <!-- Display -->
+            <div style="margin-bottom: 4px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <div id="hex-calc-mode-indicator">HEX</div>
+                    <input type="text" id="hex-calc-display" readonly>
+                </div>
+                <div id="hex-calc-history"><span data-i18n="tool.calc.decimal">Decimal:</span> 0</div>
+            </div>
+
+            <!-- Teclado -->
+            <div class="calc-grid">
+                <button class="hex-calc-btn hex-calc-letter" onclick="calc.appendDigit('D')">D</button>
+                <button class="hex-calc-btn hex-calc-letter" onclick="calc.appendDigit('E')">E</button>
+                <button class="hex-calc-btn hex-calc-letter" onclick="calc.appendDigit('F')">F</button>
+                <button class="hex-calc-btn hex-calc-backspace" onclick="calc.backspace()">&#x232B;</button>
+
+                <button class="hex-calc-btn hex-calc-letter" onclick="calc.appendDigit('A')">A</button>
+                <button class="hex-calc-btn hex-calc-letter" onclick="calc.appendDigit('B')">B</button>
+                <button class="hex-calc-btn hex-calc-letter" onclick="calc.appendDigit('C')">C</button>
+                <button class="hex-calc-btn hex-calc-operator" onclick="calc.setOperator('/')">&#x00F7;</button>
+
+                <button class="hex-calc-btn hex-calc-digit" onclick="calc.appendDigit('7')">7</button>
+                <button class="hex-calc-btn hex-calc-digit" onclick="calc.appendDigit('8')">8</button>
+                <button class="hex-calc-btn hex-calc-digit" onclick="calc.appendDigit('9')">9</button>
+                <button class="hex-calc-btn hex-calc-operator" onclick="calc.setOperator('*')">&#x00D7;</button>
+
+                <button class="hex-calc-btn hex-calc-digit" onclick="calc.appendDigit('4')">4</button>
+                <button class="hex-calc-btn hex-calc-digit" onclick="calc.appendDigit('5')">5</button>
+                <button class="hex-calc-btn hex-calc-digit" onclick="calc.appendDigit('6')">6</button>
+                <button class="hex-calc-btn hex-calc-operator" onclick="calc.setOperator('-')">-</button>
+
+                <button class="hex-calc-btn hex-calc-digit" onclick="calc.appendDigit('1')">1</button>
+                <button class="hex-calc-btn hex-calc-digit" onclick="calc.appendDigit('2')">2</button>
+                <button class="hex-calc-btn hex-calc-digit" onclick="calc.appendDigit('3')">3</button>
+                <button class="hex-calc-btn hex-calc-operator" onclick="calc.setOperator('+')">+</button>
+
+                <button class="hex-calc-btn hex-calc-letter" onclick="calc.appendValue('FF')">FF</button>
+                <button class="hex-calc-btn hex-calc-letter" onclick="calc.appendValue('00')">00</button>
+                <button class="hex-calc-btn hex-calc-digit" onclick="calc.appendDigit('0')">0</button>
+                <button class="hex-calc-btn hex-calc-equals" onclick="calc.calculate()">=</button>
+            </div>
+
+            <div class="actions-row">
+                <button class="btn" onclick="calc.clear()" data-i18n="tool.calc.clear">C</button>
+                <button class="btn" onclick="calc.clearEntry()" data-i18n="tool.calc.clear_entry">CE</button>
+                <button class="btn" onclick="calc.copyToClipboard()" data-i18n="tool.calc.copy">Copiar</button>
+                <button class="btn" onclick="calc.pasteFromClipboard()" data-i18n="tool.calc.paste">Colar</button>
+            </div>
+
+            <div>
+                <div class="section-title" data-i18n="tool.calc.conversions">ConversÃµes:</div>
+                <div class="actions-row" style="grid-template-columns: repeat(3, 1fr);">
+                    <button class="btn" onclick="calc.convertToDecimal()" data-i18n="tool.calc.to_decimal">Decimal</button>
+                    <button class="btn" onclick="calc.convertToHex()" data-i18n="tool.calc.to_hex">Hex</button>
+                    <button class="btn" onclick="calc.toggleMode()" data-i18n="tool.calc.toggle">Alternar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Parte ScrollÃ¡vel (HistÃ³rico) -->
+        <div class="history-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span class="section-title" data-i18n="tool.calc.history">HistÃ³rico:</span>
+                <div style="display: flex; gap: 4px;">
+                    <button class="btn" style="padding: 2px 6px; font-size: 10px;" onclick="calc.exportHistory()" data-i18n="tool.calc.export">Exportar</button>
+                    <button class="btn" style="padding: 2px 6px; font-size: 10px;" onclick="calc.clearHistory()" data-i18n="tool.calc.clear_history">Limpar</button>
+                </div>
+            </div>
+            <div id="hex-calc-history-list">
+                <div style="color: #a0a9c0; text-align: center; font-style: italic;" data-i18n="tool.calc.no_operations">Nenhuma operaÃ§Ã£o ainda</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/core/i18n.js"></script>
+    <script src="../js/features/ui/notification_system.js"></script>
+    <script src="../js/tools/renderers/calc_tool_renderer.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.I18n) {
+                I18n.loadSavedLanguage();
+                I18n.applyTranslations();
+            }
+        });
+    </script>
+</body>
+</html>
+

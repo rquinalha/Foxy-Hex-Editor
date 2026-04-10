@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sobre Foxy Hex Editor</title>
+    <style>
+        :root {
+            --primary: #ff6b35;
+            --secondary: #f7931e;
+            --background: #0f0f1e;
+            --modal-bg: rgba(22, 33, 62, 0.95);
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--background);
+            color: white;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .about-container {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(15, 15, 30, 0.9) 0%, rgba(26, 26, 46, 0.95) 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            padding: 30px;
+            box-sizing: border-box;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .logo-container {
+            width: 120px;
+            height: 120px;
+            margin-bottom: 20px;
+            filter: drop-shadow(0 0 15px rgba(255, 107, 53, 0.4));
+            animation: float 4s ease-in-out infinite;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        .logo {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 28px;
+            background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        .version {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 5px;
+            font-family: 'Consolas', monospace;
+        }
+
+        .description {
+            text-align: center;
+            font-size: 15px;
+            color: rgba(255, 255, 255, 0.9);
+            margin: 20px 0;
+            line-height: 1.6;
+            max-width: 320px;
+        }
+
+        .credits {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 10px;
+        }
+
+        .author {
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        button {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 10px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 107, 53, 0.5);
+            transform: translateY(-2px);
+        }
+
+        button.primary {
+            background: linear-gradient(135deg, rgba(255, 107, 53, 0.2) 0%, rgba(247, 147, 30, 0.2) 100%);
+            border-color: rgba(255, 107, 53, 0.3);
+        }
+
+        button.primary:hover {
+            background: linear-gradient(135deg, rgba(255, 107, 53, 0.3) 0%, rgba(247, 147, 30, 0.3) 100%);
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 5px;
+            line-height: 1;
+        }
+
+        .close-btn:hover {
+            color: white;
+            transform: none;
+            background: none;
+        }
+
+        .particles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+            opacity: 0.3;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="about-container">
+        <button class="close-btn" onclick="window.close()">×</button>
+
+        <div class="logo-container">
+            <img src="../assets/foxy.png" alt="Logo" class="logo">
+        </div>
+
+        <h1 id="app-name">Foxy Hex Editor</h1>
+        <div class="version" id="app-version">Version 1.0.0</div>
+
+        <p class="description" id="app-description">
+            Editor hexadecimal focado em tradução e ROM hacking.
+        </p>
+
+        <div class="credits" id="app-credits">
+            Desenvolvido por <span class="author">Rafael Quinalha</span>
+        </div>
+
+        <div class="buttons">
+            <button onclick="openLink('https://github.com/Quinalha/Foxy-Hex-Editor')" id="btn-github">GitHub</button>
+            <button class="primary" onclick="window.close()" id="btn-ok">OK</button>
+        </div>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        function openLink(url) {
+            ipcRenderer.send('open-external-link', url);
+        }
+
+        // Tradução dinâmica
+        ipcRenderer.on('init-about', (event, data) => {
+            if (data.lang === 'en') {
+                document.getElementById('app-description').innerText = 'Hex editor focused on translation and ROM hacking.';
+                document.getElementById('app-credits').innerHTML = 'Developed by <span class="author">Rafael Quinalha</span>';
+                document.getElementById('btn-ok').innerText = 'OK';
+            }
+        });
+
+        // Solicitar estado inicial
+        ipcRenderer.send('about-window-ready');
+    </script>
+</body>
+
+</html>

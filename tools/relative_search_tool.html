@@ -1,0 +1,498 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Busca Relativa</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
+            color: #ffffff;
+            display: grid;
+            grid-template-rows: auto auto 1fr auto;
+        }
+
+        .header,
+        .toolbar,
+        .advanced,
+        .footer {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            background: linear-gradient(135deg, rgba(255, 107, 53, 0.15) 0%, rgba(247, 147, 30, 0.15) 100%);
+            border-bottom: 1px solid rgba(255, 107, 53, 0.3);
+            backdrop-filter: blur(5px);
+        }
+
+        .brand {
+            display: flex;
+            gap: 14px;
+            align-items: center;
+        }
+
+        .brand h1 {
+            margin: 0;
+            font-size: 22px;
+            color: #ff6b35;
+        }
+
+        .brand p {
+            margin: 4px 0 0;
+            font-size: 12px;
+            color: #cbd5e1;
+        }
+
+        .about {
+            text-align: right;
+            font-size: 12px;
+            color: #cbd5e1;
+        }
+
+        .about a {
+            color: #ff6b35;
+            text-decoration: none;
+        }
+
+        .toolbar {
+            padding: 14px 20px;
+            display: grid;
+            grid-template-columns: 1.3fr 1.2fr 0.9fr 0.9fr 1fr auto auto;
+            gap: 10px;
+            align-items: end;
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .toolbar .field {
+            display: grid;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .advanced .field {
+            display: grid;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        label {
+            font-size: 12px;
+            color: #ff6b35;
+            font-weight: 600;
+        }
+
+        input,
+        select,
+        textarea,
+        button {
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.05);
+            color: #ffffff;
+            padding: 10px 12px;
+            font: inherit;
+        }
+
+        textarea {
+            min-height: 44px;
+            height: 44px;
+            resize: none;
+        }
+
+        #wildcard-input {
+            min-height: 44px;
+            height: 44px;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #ff6b35;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        button {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+        }
+
+        button.primary {
+            background: #ff6b35;
+            color: white;
+            font-weight: 700;
+            border-color: rgba(255, 107, 53, 0.35);
+        }
+
+        button.primary:hover {
+            background: #ff8552;
+        }
+
+        button.ghost {
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        button.ghost:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .advanced {
+            padding: 6px 20px 8px;
+            display: grid;
+            grid-template-columns: 1.2fr 0.9fr 1fr;
+            gap: 8px 10px;
+            background: rgba(255, 255, 255, 0.02);
+            align-items: start;
+        }
+
+        .checkbox-line {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            white-space: nowrap;
+        }
+
+        .advanced-spacer {
+            min-height: 1px;
+        }
+
+        .advanced-spacer,
+        .checkbox-line:nth-of-type(4) {
+            justify-self: start;
+        }
+
+        .checkbox-line label {
+            color: #ffffff;
+            font-weight: 500;
+        }
+
+        .content {
+            min-height: 0;
+            display: grid;
+            grid-template-columns: minmax(300px, 360px) 1fr;
+        }
+
+        .sidebar {
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 18px 16px;
+            background: rgba(255, 255, 255, 0.02);
+            overflow-y: auto;
+        }
+
+        .sidebar h2,
+        .results h2 {
+            margin: 0 0 12px;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #ff6b35;
+        }
+
+        .panel {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 14px;
+        }
+
+        .panel p,
+        .panel li {
+            font-size: 13px;
+            color: #ffffff;
+            line-height: 1.5;
+        }
+
+        .panel p {
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        .metrics {
+            display: grid;
+            gap: 8px;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 13px;
+        }
+
+        .metric span:last-child {
+            color: #4fc3f7;
+            text-align: right;
+        }
+
+        .actions {
+            display: grid;
+            gap: 8px;
+        }
+
+        .results {
+            min-height: 0;
+            display: grid;
+            grid-template-rows: auto auto 1fr;
+            padding: 18px 20px;
+        }
+
+        .summary {
+            font-size: 13px;
+            color: #cbd5e1;
+            margin-bottom: 12px;
+        }
+
+        .result-list {
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .result-list.has-results {
+            overflow: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            vertical-align: top;
+            font-size: 13px;
+        }
+
+        th {
+            position: sticky;
+            top: 0;
+            text-align: left;
+            background: linear-gradient(135deg, #8B4513 0%, #A0522D 50%, #CD853F 100%);
+            color: #ffd700;
+            z-index: 1;
+        }
+
+        tr.result-row {
+            cursor: pointer;
+        }
+
+        tr.result-row:hover {
+            background: rgba(255, 107, 53, 0.15);
+        }
+
+        tr.result-row.active {
+            background: rgba(255, 107, 53, 0.22);
+        }
+
+        .mono {
+            font-family: Consolas, 'Courier New', monospace;
+        }
+
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 20px;
+            background: rgba(255, 255, 255, 0.03);
+            font-size: 12px;
+            color: #cbd5e1;
+        }
+
+        .status {
+            min-height: 18px;
+        }
+
+        .sidebar::-webkit-scrollbar,
+        .result-list::-webkit-scrollbar,
+        textarea::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        .sidebar::-webkit-scrollbar-track,
+        .result-list::-webkit-scrollbar-track,
+        textarea::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 999px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb,
+        .result-list::-webkit-scrollbar-thumb,
+        textarea::-webkit-scrollbar-thumb {
+            background: rgba(255, 107, 53, 0.6);
+            border-radius: 999px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb:hover,
+        .result-list::-webkit-scrollbar-thumb:hover,
+        textarea::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 107, 53, 0.8);
+        }
+
+        @media (max-width: 1080px) {
+
+            .toolbar,
+            .advanced,
+            .content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <div class="brand">
+            <div>
+                <h1 id="title-text">Busca Relativa</h1>
+                <p id="subtitle-text">Ferramenta integrada para localizar padrões relativos no
+                    arquivo da aba atual.</p>
+            </div>
+        </div>
+        <div class="about">
+            <div id="about-title"></div>
+            <div id="about-author"></div>
+            <a href="" target="_blank" rel="noreferrer" id="about-link"></a>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <div class="field">
+            <label for="search-input" id="label-search-input">Texto ou sequência</label>
+            <input id="search-input" type="text" placeholder="Ex.: HELLO ou 12 15 18 15">
+        </div>
+        <div class="field">
+            <label for="search-type" id="label-search-type">Tipo de busca</label>
+            <select id="search-type">
+                <option value="relative">Relative search</option>
+                <option value="value-scan">Value scan relative</option>
+            </select>
+        </div>
+        <div class="field">
+            <label for="width-select" id="label-width">Largura</label>
+            <select id="width-select">
+                <option value="8">8-bit</option>
+                <option value="16">16-bit</option>
+            </select>
+        </div>
+        <div class="field">
+            <label for="endianness-select" id="label-endianness">Endianness</label>
+            <select id="endianness-select">
+                <option value="LE">LE</option>
+                <option value="BE">BE</option>
+            </select>
+        </div>
+        <div class="field">
+            <label for="preview-width" id="label-preview">Preview</label>
+            <input id="preview-width" type="number" min="8" max="80" value="28">
+        </div>
+        <button class="primary" id="search-btn">Buscar</button>
+        <button class="ghost" id="close-btn">Fechar</button>
+    </div>
+
+    <div class="advanced">
+        <div class="field">
+            <label for="char-sequence" id="label-char-sequence">SequÃªncia de caracteres personalizada</label>
+            <textarea id="char-sequence" placeholder="Opcional. Ex.: ABCDEFGHIJKL..."></textarea>
+        </div>
+        <div class="field">
+            <label for="wildcard-input" id="label-wildcard">Wildcard</label>
+            <input id="wildcard-input" type="text" maxlength="1" value="*" placeholder="*">
+        </div>
+        <div class="advanced-spacer"></div>
+        <div class="checkbox-line">
+            <input id="wildcard-enabled" type="checkbox">
+            <label for="wildcard-enabled" id="label-wildcard-enabled">Habilitar wildcard</label>
+        </div>
+        <div class="checkbox-line">
+            <input id="dedupe-results" type="checkbox" checked>
+            <label for="dedupe-results" id="label-dedupe">Ocultar repetidos</label>
+        </div>
+        <div class="checkbox-line">
+            <input id="prefer-current-table" type="checkbox">
+            <label for="prefer-current-table" id="label-prefer-table">Usar tabela atual no preview</label>
+        </div>
+    </div>
+
+    <div class="content">
+        <aside class="sidebar">
+            <h2 id="source-title">Arquivo atual</h2>
+            <div class="panel metrics" id="source-metrics"></div>
+
+            <h2 id="selection-title">Resultado selecionado</h2>
+            <div class="panel" id="selection-panel">
+                <p id="selection-empty">Nenhum resultado selecionado ainda.</p>
+            </div>
+
+            <h2 id="actions-title">AÃ§Ãµes</h2>
+            <div class="panel actions">
+                <button id="apply-table-btn" class="primary" disabled>Aplicar no Editor Hex</button>
+                <button id="open-table-editor-btn" class="ghost" disabled>Criar/Editar Tabela</button>
+            </div>
+        </aside>
+
+        <section class="results">
+            <div>
+                <h2 id="results-title">Resultados</h2>
+                <div class="summary" id="summary-text">Nenhuma busca executada.</div>
+            </div>
+            <div class="panel" id="search-notes">
+                <p id="notes-text">A busca usa o arquivo da aba atual. Se houver altera&ccedil;&otilde;es n&atilde;o salvas, a ferramenta
+                    tenta usar o conte&uacute;do atual aberto no editor.</p>
+            </div>
+            <div class="result-list" id="result-list">
+                <table>
+                    <thead>
+                        <tr>
+                            <th id="th-offset">Offset</th>
+                            <th id="th-align">Modo</th>
+                            <th id="th-preview">Preview</th>
+                            <th id="th-table">Tabela</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-body">
+                        <tr>
+                            <td colspan="4" id="empty-results">Nenhum resultado.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <div class="footer">
+        <div class="status" id="status-text">Pronto.</div>
+        <div id="footer-file">Sem arquivo carregado</div>
+    </div>
+
+    <script src="../js/tools/renderers/relative_search_tool_renderer.js"></script>
+</body>
+
+</html>
+
+

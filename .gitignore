@@ -1,0 +1,45 @@
+# Pasta de dados local do Foxy Hex Editor
+.foxy-data/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+build/
+release/
+*.exe
+*.AppImage
+*.deb
+*.rpm
+*.dmg
+*.pkg
+
+# Logs
+logs/
+*.log
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Electron
+.electron-gyp/
+.cache/

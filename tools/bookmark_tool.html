@@ -1,0 +1,175 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="tool.bookmark.title">Adicionar Favorito</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0f0f1e;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: #0f0f1e;
+            color: #ff6b35;
+            padding: 8px 20px;
+            font-size: 16px;
+            font-weight: 600;
+            text-align: center;
+            flex-shrink: 0;
+            border-bottom: 1px solid rgba(255, 107, 53, 0.3);
+        }
+
+        .content {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            overflow: hidden;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-group label {
+            color: #ff6b35;
+            font-weight: 500;
+            font-size: 13px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px 14px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: #ffffff;
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #ff6b35;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .form-input::placeholder {
+            color: #888;
+        }
+
+        textarea.form-input {
+            resize: none;
+            flex: 1;
+            min-height: 60px;
+            font-family: inherit;
+        }
+
+        .offset-display {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            color: #ff6b35;
+            font-weight: 600;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: auto;
+            padding-top: 4px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn.primary {
+            background: linear-gradient(135deg, #ff6b35 0%, #ee5a24 100%);
+            color: white;
+        }
+
+        .btn.primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(255, 107, 53, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="header" data-i18n="tool.bookmark.header" data-i18n-html>
+        &#x1F516; Adicionar Favorito
+    </div>
+    <div class="content">
+        <div class="form-group">
+            <input type="text" id="bookmark-title" class="form-input" data-i18n-placeholder="tool.bookmark.title_placeholder" placeholder="TÃ­tulo do favorito (opcional)" autocomplete="off">
+        </div>
+        <div class="form-group" style="flex: 1;">
+            <textarea id="bookmark-comment" class="form-input" data-i18n-placeholder="tool.bookmark.comment_placeholder" placeholder="ComentÃ¡rio ou descriÃ§Ã£o"></textarea>
+        </div>
+        <div class="form-group">
+            <label data-i18n="tool.bookmark.offset">Offset</label>
+            <div id="bookmark-offset" class="offset-display">0x00000000</div>
+        </div>
+        <div class="actions">
+            <button class="btn" onclick="cancelBookmark()" data-i18n="tool.bookmark.cancel" data-i18n-html>&#x274C; Cancelar</button>
+            <button class="btn primary" onclick="addBookmark()" data-i18n="tool.bookmark.add" data-i18n-html>&#x1F516; Adicionar Favorito</button>
+        </div>
+    </div>
+
+    <script src="../js/core/i18n.js"></script>
+    <script src="../js/tools/renderers/bookmark_tool_renderer.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.I18n) {
+                I18n.loadSavedLanguage();
+                I18n.applyTranslations();
+            }
+        });
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,68 @@
+{
+    "name": "foxy-hex-editor",
+    "version": "1.0.0",
+    "description": "Foxy Hex Editor - Editor Hex Avançado e Ferramentas de Tradução",
+    "main": "electron/main.js",
+    "scripts": {
+        "start": "electron .",
+        "test:search": "node tools/tests/search-regression.js",
+        "build": "electron-builder",
+        "dist": "electron-builder --publish=never",
+        "portable": "electron-builder --win portable --publish=never",
+        "appimage": "electron-builder --linux AppImage --publish=never"
+    },
+    "author": "Foxy Editor",
+    "license": "GPL-3.0",
+    "devDependencies": {
+        "electron": "^41.2.0",
+        "electron-builder": "^24.9.1"
+    },
+    "build": {
+        "appId": "com.foxyeditor.hex",
+        "productName": "Foxy Hex Editor",
+        "directories": {
+            "output": "dist"
+        },
+        "win": {
+            "target": [
+                {
+                    "target": "portable",
+                    "arch": [
+                        "x64"
+                    ]
+                }
+            ],
+            "icon": "assets/icon.ico",
+            "publisherName": "Foxy Hex Editor"
+        },
+        "linux": {
+            "target": [
+                {
+                    "target": "AppImage",
+                    "arch": [
+                        "x64"
+                    ]
+                }
+            ],
+            "icon": "assets/foxy.png",
+            "category": "Development",
+            "maintainer": "Foxy Hex Editor Contributors"
+        },
+        "mac": {
+            "target": [
+                {
+                    "target": "dmg",
+                    "arch": [
+                        "x64",
+                        "arm64"
+                    ]
+                }
+            ],
+            "icon": "assets/foxy.png",
+            "category": "public.app-category.developer-tools"
+        },
+        "portable": {
+            "artifactName": "FoxyHexEditor-${version}-portable.${ext}"
+        }
+    }
+}
