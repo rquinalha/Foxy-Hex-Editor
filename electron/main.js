@@ -911,7 +911,7 @@ const menuTranslations = {
         view: 'Visualizar', reload: 'Recarregar', devTools: 'Ferramentas de Desenvolvedor', resetZoom: 'Zoom Normal', zoomIn: 'Aumentar Zoom', zoomOut: 'Diminuir Zoom', fullScreen: 'Tela Cheia',
         tools: 'Ferramentas', enableEdit: 'Habilitar Edição', insertMode: 'Inserir/Sobrescrever', findReplace: 'Buscar e Substituir', gotoOffset: 'Ir para Offset...', hexCalc: 'Calculadora Hex',
         highlights: 'Marcações', analyze: 'Analisar', bookmarks: 'Favoritos', relativeSearch: 'Busca Relativa', customizeColors: 'Customizar Cores',
-        help: 'Ajuda', about: 'Sobre Foxy Hex Editor', aboutTitle: 'Sobre Foxy Hex Editor', aboutMessage: 'Foxy Hex Editor v1.0.0', aboutDetail: 'Editor Hex avançado focado em games e traduções.',
+        help: 'Ajuda', about: 'Sobre Foxy Hex Editor', aboutTitle: 'Sobre Foxy Hex Editor', aboutMessage: 'Foxy Hex Editor v1.0.1', aboutDetail: 'Editor Hex avançado focado em games e traduções.',
         noRecentFiles: 'Nenhum arquivo recente'
     },
     en: {
@@ -920,7 +920,7 @@ const menuTranslations = {
         view: 'View', reload: 'Reload', devTools: 'Developer Tools', resetZoom: 'Reset Zoom', zoomIn: 'Zoom In', zoomOut: 'Zoom Out', fullScreen: 'Full Screen',
         tools: 'Tools', enableEdit: 'Enable Editing', insertMode: 'Insert/Overwrite', findReplace: 'Find and Replace', gotoOffset: 'Go to Offset...', hexCalc: 'Hex Calculator',
         highlights: 'Highlights', analyze: 'Analyze', bookmarks: 'Bookmarks', relativeSearch: 'Relative Search', customizeColors: 'Customize Colors',
-        help: 'Help', about: 'About Foxy Hex Editor', aboutTitle: 'About Foxy Hex Editor', aboutMessage: 'Foxy Hex Editor v1.0.0', aboutDetail: 'Advanced Hex Editor focused on games and translations.',
+        help: 'Help', about: 'About Foxy Hex Editor', aboutTitle: 'About Foxy Hex Editor', aboutMessage: 'Foxy Hex Editor v1.0.1', aboutDetail: 'Advanced Hex Editor focused on games and translations.',
         noRecentFiles: 'No recent files'
     }
 };

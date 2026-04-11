@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-1.0.0-orange?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/Version-1.0.1-orange?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/Platform-Windows%20|%20Linux-blue?style=for-the-badge" alt="Platform">
   <img src="https://img.shields.io/badge/License-GPL--3.0-green?style=for-the-badge" alt="License">
 </p>
@@ -59,7 +59,7 @@ You can find pre-compiled versions in the **Releases** section of the repository
 - 🐧 **Linux**: AppImage (works on almost all distros).
 
 > [!TIP]
-> **[Click here to download the latest version](https://github.com/rquinalha/Foxy-Hex-Editor/releases/tag/v1.0.0)**
+> **[Click here to download the latest version](https://github.com/rquinalha/Foxy-Hex-Editor/releases/tag/v1.0.1)**
 
 ## 🚀 How to Run and Configure
  

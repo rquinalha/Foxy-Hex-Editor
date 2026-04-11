@@ -1,6 +1,6 @@
 {
     "name": "foxy-hex-editor",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Foxy Hex Editor - Editor Hex Avançado e Ferramentas de Tradução",
     "main": "electron/main.js",
     "scripts": {
