@@ -783,7 +783,10 @@ function loadRecentFiles() {
         if (fsSync.existsSync(recentFilesPath)) {
             const data = fsSync.readFileSync(recentFilesPath, 'utf8');
             recentFiles = JSON.parse(data);
-            recentFiles = recentFiles.filter(filePath => fsSync.existsSync(filePath));
+            
+            // Filtro mais tolerante: apenas remover se for uma string vazia ou inválida
+            recentFiles = recentFiles.filter(filePath => filePath && typeof filePath === 'string');
+            
             if (recentFiles.length > MAX_RECENT_FILES) {
                 recentFiles = recentFiles.slice(0, MAX_RECENT_FILES);
             }
@@ -807,18 +810,30 @@ function saveRecentFiles() {
 function addRecentFile(filePath) {
     if (!filePath || typeof filePath !== 'string') return;
     
-    recentFiles = recentFiles.filter(f => f !== filePath);
-    recentFiles.unshift(filePath);
+    // Normalizar o caminho para evitar duplicatas por causa de barras ou case no Windows
+    const normalizedPath = path.normalize(filePath);
+    
+    // Filtrar ignorando Case no Windows
+    recentFiles = recentFiles.filter(f => {
+        if (process.platform === 'win32') {
+            return f.toLowerCase() !== normalizedPath.toLowerCase();
+        }
+        return f !== normalizedPath;
+    });
+
+    recentFiles.unshift(normalizedPath);
+    
     if (recentFiles.length > MAX_RECENT_FILES) {
         recentFiles = recentFiles.slice(0, MAX_RECENT_FILES);
     }
+    
     saveRecentFiles();
     createMenu();
 }
 
 function buildRecentFilesSubmenu() {
     if (recentFiles.length === 0) {
-        return [{ label: 'Nenhum arquivo recente', enabled: false }];
+        return [{ label: t('noRecentFiles'), enabled: false }];
     }
     
     return recentFiles.map((filePath, index) => {
@@ -826,16 +841,22 @@ function buildRecentFilesSubmenu() {
         const displayIndex = index + 1;
         return {
             label: `${displayIndex}. ${fileName}`,
-            accelerator: `Ctrl+${displayIndex}`,
-            click: () => openRecentFile(filePath)
+            accelerator: index < 9 ? `Ctrl+${displayIndex}` : undefined,
+            click: () => { openRecentFile(filePath); }
         };
     });
 }
 
 async function openRecentFile(filePath) {
-    if (!mainWindow || !fsSync.existsSync(filePath)) {
-        dialog.showErrorBox('Arquivo não encontrado', `O arquivo não existe mais:\n${filePath}`);
-        recentFiles = recentFiles.filter(f => f !== filePath);
+    const normalizedPath = path.normalize(filePath);
+    if (!mainWindow || !fsSync.existsSync(normalizedPath)) {
+        dialog.showErrorBox('Arquivo não encontrado', `O arquivo não existe mais:\n${normalizedPath}`);
+        recentFiles = recentFiles.filter(f => {
+            if (process.platform === 'win32') {
+                return f.toLowerCase() !== normalizedPath.toLowerCase();
+            }
+            return f !== normalizedPath;
+        });
         saveRecentFiles();
         createMenu();
         return;
@@ -984,19 +1005,7 @@ function createMenu() {
     Menu.setApplicationMenu(menu);
 }
 
-function buildRecentFilesSubmenu() {
-    if (recentFiles.length === 0) {
-        return [{ label: t('noRecentFiles'), enabled: false }];
-    }
-    return recentFiles.map((filePath, index) => {
-        const fileName = path.basename(filePath);
-        const displayIndex = index + 1;
-        return {
-            label: `${displayIndex}. ${fileName}`,
-            click: () => { openRecentFile(filePath); }
-        };
-    });
-}
+// Função duplicada removida
 
 ipcMain.on('change-menu-language', (event, lang) => {
     if (lang === 'pt' || lang === 'en') {

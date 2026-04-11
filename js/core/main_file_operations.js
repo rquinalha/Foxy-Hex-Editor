@@ -68,15 +68,20 @@ async loadFile(file) {
 },
 
 resolveLoadedFilePath(file) {
-    if (file?.path) {
+    if (!file) return null;
+
+    // Em Electron, o objeto File (e caminhos passados manualmente) deve ter a propriedade 'path'
+    if (file.path && typeof file.path === 'string') {
         return file.path;
     }
 
-    if (file?.webkitRelativePath) {
+    // Fallback para webkitRelativePath se disponível
+    if (file.webkitRelativePath && typeof file.webkitRelativePath === 'string' && file.webkitRelativePath !== '') {
         return file.webkitRelativePath;
     }
 
-    return file?.name || null;
+    // Se tivermos apenas o nome, retornamos o nome (casos de Blob ou arquivo sem path acessível)
+    return file.name || null;
 },
 
 async readFileAsArrayBuffer(file) {
@@ -142,6 +147,7 @@ syncLoadedFileContext(file) {
     }
 
     if (typeof require !== 'undefined' && filePath) {
+        // Enviar para o main process
         const { ipcRenderer } = require('electron');
         ipcRenderer.send('add-recent-file', filePath);
     }

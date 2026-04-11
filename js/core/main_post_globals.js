@@ -289,8 +289,11 @@ if (fileDisplay) {
     
     // Notificar main process para adicionar à lista de arquivos recentes
     if (typeof require !== 'undefined' && filePath) {
-        const { ipcRenderer } = require('electron');
-        ipcRenderer.send('add-recent-file', filePath);
+        // Apenas adicionar aos recentes se parecer um caminho absoluto
+        if (filePath.includes('/') || filePath.includes('\\')) {
+            const { ipcRenderer } = require('electron');
+            ipcRenderer.send('add-recent-file', filePath);
+        }
     }
     
     finalizeLoadedFile(hexEditor);
