@@ -1,4 +1,97 @@
 Object.assign(FoxyHexEditorComplete.prototype, {
+decodeImportedTableContent(source, fileLabel = '') {
+    const fileName = String(fileLabel || '');
+    const ext = fileName.toLowerCase().split('.').pop();
+    const isTblLike = ext === 'tbl' || ext === 'txt' || !ext;
+
+    if (typeof source === 'string') {
+        return source.replace(/^\uFEFF/, '');
+    }
+
+    const decodeUtf8WithBrowser = (bytes) => {
+        try {
+            return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+        } catch (_) {
+            return new TextDecoder().decode(bytes);
+        }
+    };
+
+    const scoreDecodedTableText = (text) => {
+        const value = String(text || '');
+        let score = 0;
+
+        if (!value) return -999999;
+        if (!value.includes('=')) score -= 50;
+        if (/\uFFFD/.test(value)) score -= 1000;
+        if (/^[\s\S]*[0-9A-Fa-f]{2,8}=.+$/m.test(value)) score += 200;
+        if (/^[\s\S]*[0-9A-Fa-f]{2,8}=\{.+\}$/m.test(value)) score += 60;
+        if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(value)) score -= 250;
+
+        const lines = value.split(/\r?\n/);
+        let validMappings = 0;
+        for (const line of lines) {
+            if (/^\s*[0-9A-Fa-f]{2,8}\s*=/.test(line)) {
+                validMappings++;
+            }
+        }
+
+        score += Math.min(validMappings, 200) * 5;
+        return score;
+    };
+
+    const tryDecodeCandidates = (bytes, iconvLite) => {
+        const candidates = [];
+
+        const pushCandidate = (encoding, text) => {
+            if (typeof text === 'string') {
+                candidates.push({ encoding, text: text.replace(/^\uFEFF/, '') });
+            }
+        };
+
+        pushCandidate('utf8', decodeUtf8WithBrowser(bytes));
+
+        if (iconvLite) {
+            ['utf8', 'win1252', 'latin1', 'shift_jis'].forEach((encoding) => {
+                try {
+                    pushCandidate(encoding, iconvLite.decode(Buffer.from(bytes), encoding));
+                } catch (_) {}
+            });
+        }
+
+        candidates.sort((a, b) => scoreDecodedTableText(b.text) - scoreDecodedTableText(a.text));
+        return candidates[0]?.text || decodeUtf8WithBrowser(bytes);
+    };
+
+    if (typeof Buffer !== 'undefined' && Buffer.isBuffer && Buffer.isBuffer(source)) {
+        let iconvLite = null;
+        try {
+            if (typeof require !== 'undefined') {
+                iconvLite = require('iconv-lite');
+            }
+        } catch (_) {}
+
+        return isTblLike ? tryDecodeCandidates(source, iconvLite) : source.toString('utf8').replace(/^\uFEFF/, '');
+    }
+
+    if (source instanceof ArrayBuffer) {
+        const bytes = new Uint8Array(source);
+        let iconvLite = null;
+        try {
+            if (typeof require !== 'undefined') {
+                iconvLite = require('iconv-lite');
+            }
+        } catch (_) {}
+
+        return isTblLike ? tryDecodeCandidates(bytes, iconvLite) : decodeUtf8WithBrowser(bytes).replace(/^\uFEFF/, '');
+    }
+
+    if (ArrayBuffer.isView(source)) {
+        return this.decodeImportedTableContent(source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength), fileLabel);
+    }
+
+    return String(source || '').replace(/^\uFEFF/, '');
+},
+
 changeCharTable() {
 const select = document.getElementById('char-table-select');
 if (!select) return;
@@ -92,7 +185,8 @@ loadCustomCharTable() {
                 const filePath = result.filePaths[0];
                 const fs = require('fs');
                 try {
-                    const content = fs.readFileSync(filePath, 'utf8');
+                    const rawContent = fs.readFileSync(filePath);
+                    const content = this.decodeImportedTableContent(rawContent, filePath);
                     applyLoadedTable(content, filePath);
                 } catch (error) {
                     window.notificationSystem.error('Erro ao carregar tabela: ' + error.message, 'Erro de Carregamento');
@@ -112,12 +206,13 @@ loadCustomCharTable() {
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
-                    applyLoadedTable(e.target.result, file.name);
+                    const content = this.decodeImportedTableContent(e.target.result, file.name);
+                    applyLoadedTable(content, file.name);
                 } catch (error) {
                     window.notificationSystem.error('Erro ao carregar tabela: ' + error.message, 'Erro de Carregamento');
                 }
             };
-            reader.readAsText(file);
+            reader.readAsArrayBuffer(file);
         };
         input.click();
     }
