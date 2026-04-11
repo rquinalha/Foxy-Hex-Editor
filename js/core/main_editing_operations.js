@@ -307,11 +307,12 @@ if (this.editMode !== 'edit') return;
 const currentTable = this.charTables && this.charTables[this.currentCharTable];
 const is16bit = currentTable && (currentTable.type === '16-bit' || currentTable.type === 'UTF-16');
 const isShiftJIS = this.isCurrentTableShiftJIS && this.isCurrentTableShiftJIS();
+const encodedByCurrentTable = typeof this.encodeTextWithCurrentTable === 'function'
+    ? this.encodeTextWithCurrentTable(char, true)
+    : null;
 
 if (is16bit) {
-    const encodedBytes = typeof this.encodeTextWithCurrentTable === 'function'
-        ? this.encodeTextWithCurrentTable(char, true)
-        : this.textTo16bitBytes(char);
+    const encodedBytes = encodedByCurrentTable || this.textTo16bitBytes(char);
 
     if (!encodedBytes || encodedBytes.length < 2) return;
 
@@ -370,9 +371,7 @@ if (is16bit) {
 }
 
 if (isShiftJIS) {
-    const encodedBytes = typeof this.encodeTextWithCurrentTable === 'function'
-        ? this.encodeTextWithCurrentTable(char, true)
-        : this.textToShiftJISBytes(char, true);
+    const encodedBytes = encodedByCurrentTable || this.textToShiftJISBytes(char, true);
 
     if (!encodedBytes || encodedBytes.length === 0) return;
 
@@ -432,6 +431,61 @@ if (isShiftJIS) {
         this.setCursor(nextCharStart, 'ascii', false);
     }
     return;
+}
+
+if (encodedByCurrentTable && encodedByCurrentTable.length > 0) {
+    const payload = encodedByCurrentTable instanceof Uint8Array
+        ? encodedByCurrentTable
+        : new Uint8Array(encodedByCurrentTable);
+    const hasSelection = this.selectionStart !== this.selectionEnd;
+    const insertPosition = this.clampCursorPosition(this.cursorPosition, true);
+
+    let changed = false;
+    if (this.insertMode) {
+        if (hasSelection) {
+            const normalized = this.getNormalizedSelectionBounds(this.activePanel || 'ascii');
+            changed = this.replaceSelectionWithBytes(
+                normalized.start,
+                normalized.end + 1,
+                payload,
+                true,
+                'Custom table text insert'
+            );
+            if (changed) {
+                this.setInsertCursor(normalized.start + payload.length, 'ascii');
+            }
+        } else {
+            changed = this.insertBytesAt(insertPosition, payload, 'Custom table text insert');
+            if (changed) {
+                this.setInsertCursor(insertPosition + payload.length, 'ascii');
+            }
+        }
+    } else {
+        if (hasSelection) {
+            const normalized = this.getNormalizedSelectionBounds(this.activePanel || 'ascii');
+            changed = this.replaceSelectionWithBytes(
+                normalized.start,
+                normalized.end + 1,
+                payload,
+                false,
+                'Custom table text edit'
+            );
+            if (changed) {
+                const nextPos = Math.max(0, normalized.start + Math.max(0, payload.length - 1));
+                this.setCursor(nextPos, 'ascii', false);
+            }
+        } else {
+            changed = this.overwriteBytesAt(this.cursorPosition, payload, 'Custom table text edit');
+            if (changed) {
+                const nextPos = Math.max(0, this.cursorPosition + Math.max(0, payload.length - 1));
+                this.setCursor(nextPos, 'ascii', false);
+            }
+        }
+    }
+
+    if (changed) {
+        return;
+    }
 }
 
 const charCode = char.charCodeAt(0);

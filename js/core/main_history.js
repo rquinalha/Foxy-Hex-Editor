@@ -6,6 +6,17 @@ toggleEditMode() {
 },
 
 toggleInsertMode() {
+    const hadSelection = Number.isInteger(this.selectionStart)
+        && Number.isInteger(this.selectionEnd)
+        && this.selectionStart !== this.selectionEnd;
+    const preservedSelection = hadSelection
+        ? {
+            start: this.selectionStart,
+            end: this.selectionEnd,
+            cursor: this.cursorPosition
+        }
+        : null;
+
     this.insertMode = !this.insertMode;
 
     if (this.insertMode && this.editMode !== 'edit') {
@@ -17,7 +28,13 @@ toggleInsertMode() {
     const dataLength = this.getDataLength();
     const panel = this.activePanel || 'hex';
 
-    if (this.insertMode) {
+    if (preservedSelection) {
+        this.selectionStart = preservedSelection.start;
+        this.selectionEnd = preservedSelection.end;
+        this.cursorPosition = preservedSelection.cursor;
+        this.renderCurrentView(true);
+        this.updateStatus();
+    } else if (this.insertMode) {
         this.setInsertCursor(this.clampCursorPosition(this.cursorPosition, true), panel);
     } else if (dataLength > 0) {
         this.setCursor(Math.min(this.cursorPosition, dataLength - 1), panel, false);

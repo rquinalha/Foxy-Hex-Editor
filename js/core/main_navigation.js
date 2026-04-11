@@ -455,6 +455,18 @@ pasteHexData(format = 'auto') {
         };
 
         const tryText = () => {
+            if (typeof this.encodeTextWithCurrentTable === 'function') {
+                const encoded = this.encodeTextWithCurrentTable(text, true)
+                    || this.encodeTextWithCurrentTable(text, false);
+                if (encoded && encoded.length > 0) {
+                    bytes = Array.isArray(encoded) ? encoded : Array.from(encoded);
+                    detectedMode = is16bit
+                        ? 'UTF-16/16-bit'
+                        : (isShiftJIS ? 'Shift-JIS' : 'Tabela ativa');
+                    return true;
+                }
+            }
+
             if (is16bit && typeof this.textTo16bitBytes === 'function') {
                 bytes = this.textTo16bitBytes(text);
                 detectedMode = 'UTF-16/16-bit';
@@ -481,13 +493,47 @@ pasteHexData(format = 'auto') {
         }
 
         if (bytes && bytes.length > 0) {
+            const hasSelection = Number.isInteger(this.selectionStart)
+                && Number.isInteger(this.selectionEnd)
+                && this.selectionStart !== this.selectionEnd;
+            const normalizedSelection = hasSelection && typeof this.getNormalizedSelectionBounds === 'function'
+                ? this.getNormalizedSelectionBounds(this.activePanel || 'hex')
+                : null;
+            const basePosition = normalizedSelection
+                ? normalizedSelection.start
+                : this.clampCursorPosition(this.cursorPosition, !!this.insertMode);
+
             if (this.insertMode) {
-                this.insertBytesAt(this.cursorPosition, bytes, 'Paste data');
+                if (normalizedSelection && typeof this.replaceSelectionWithBytes === 'function') {
+                    this.replaceSelectionWithBytes(
+                        normalizedSelection.start,
+                        normalizedSelection.end + 1,
+                        bytes,
+                        true,
+                        'Paste data'
+                    );
+                } else {
+                    this.insertBytesAt(basePosition, bytes, 'Paste data');
+                }
+            } else if (normalizedSelection && typeof this.replaceSelectionWithBytes === 'function') {
+                this.replaceSelectionWithBytes(
+                    normalizedSelection.start,
+                    normalizedSelection.end + 1,
+                    bytes,
+                    false,
+                    'Paste data'
+                );
             } else {
-                this.overwriteBytesAt(this.cursorPosition, bytes, 'Paste data');
+                this.overwriteBytesAt(basePosition, bytes, 'Paste data');
             }
-            this.setCursor(this.cursorPosition + bytes.length, null, false);
-            
+
+            if (this.insertMode && typeof this.setInsertCursor === 'function') {
+                this.setInsertCursor(basePosition + bytes.length, this.activePanel || null);
+            } else {
+                const lastBytePosition = Math.max(0, basePosition + Math.max(0, bytes.length - 1));
+                this.setCursor(lastBytePosition, this.activePanel || null, false);
+            }
+
             if (window.notificationSystem) {
                 window.notificationSystem.success(`📥 Colado como ${detectedMode} (${bytes.length} bytes)`, 'Colagem');
             }

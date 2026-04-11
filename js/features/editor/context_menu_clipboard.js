@@ -236,6 +236,13 @@
 
         const tryEncodeTextByTable = (value) => {
             if (!value) return [];
+            if (typeof hexEditor.encodeTextWithCurrentTable === 'function') {
+                const encoded = hexEditor.encodeTextWithCurrentTable(value, true)
+                    || hexEditor.encodeTextWithCurrentTable(value, false);
+                if (encoded && encoded.length > 0) {
+                    return Array.isArray(encoded) ? encoded : Array.from(encoded);
+                }
+            }
             if (is16bit && typeof hexEditor.textTo16bitBytes === 'function') {
                 const arr = hexEditor.textTo16bitBytes(value);
                 return Array.isArray(arr) ? arr : (arr ? Array.from(arr) : []);
@@ -270,15 +277,54 @@
 
     applyPasteBytes(hexEditor, bytes) {
         const isInsertMode = !!hexEditor.insertMode;
+        const hasSelection = Number.isInteger(hexEditor.selectionStart)
+            && Number.isInteger(hexEditor.selectionEnd)
+            && hexEditor.selectionStart !== hexEditor.selectionEnd;
+        const selectionBounds = hasSelection && typeof hexEditor.getNormalizedSelectionBounds === 'function'
+            ? hexEditor.getNormalizedSelectionBounds(hexEditor.activePanel || 'hex')
+            : null;
+        const basePosition = selectionBounds
+            ? selectionBounds.start
+            : (typeof hexEditor.clampCursorPosition === 'function'
+                ? hexEditor.clampCursorPosition(hexEditor.cursorPosition, isInsertMode)
+                : hexEditor.cursorPosition);
+
         if (isInsertMode) {
             this.insertBytes(hexEditor, bytes);
         } else {
             this.overwriteBytes(hexEditor, bytes);
         }
-        hexEditor.setCursor(hexEditor.cursorPosition + bytes.length, null, false);
+
+        if (isInsertMode && typeof hexEditor.setInsertCursor === 'function') {
+            hexEditor.setInsertCursor(basePosition + bytes.length, hexEditor.activePanel || null);
+        } else if (typeof hexEditor.setCursor === 'function') {
+            const lastBytePosition = Math.max(0, basePosition + Math.max(0, bytes.length - 1));
+            hexEditor.setCursor(lastBytePosition, hexEditor.activePanel || null, false);
+        }
     },
 
     insertBytes(hexEditor, bytes) {
+        const hasSelection = Number.isInteger(hexEditor.selectionStart)
+            && Number.isInteger(hexEditor.selectionEnd)
+            && hexEditor.selectionStart !== hexEditor.selectionEnd;
+
+        if (hasSelection && typeof hexEditor.replaceSelectionWithBytes === 'function') {
+            const normalized = typeof hexEditor.getNormalizedSelectionBounds === 'function'
+                ? hexEditor.getNormalizedSelectionBounds(hexEditor.activePanel || 'hex')
+                : {
+                    start: Math.min(hexEditor.selectionStart, hexEditor.selectionEnd),
+                    end: Math.max(hexEditor.selectionStart, hexEditor.selectionEnd)
+                };
+
+            return hexEditor.replaceSelectionWithBytes(
+                normalized.start,
+                normalized.end + 1,
+                bytes,
+                true,
+                'Context menu paste insert'
+            );
+        }
+
         return hexEditor.insertBytesAt(hexEditor.cursorPosition, bytes, 'Context menu paste insert');
     },
 
