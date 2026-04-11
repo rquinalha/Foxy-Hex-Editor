@@ -74,6 +74,18 @@ resolveLoadedFilePath(file) {
     if (file.path && typeof file.path === 'string') {
         return file.path;
     }
+    if (typeof require !== 'undefined') {
+        try {
+            const electron = require('electron');
+            const absolutePath = electron && electron.webUtils && typeof electron.webUtils.getPathForFile === 'function'
+                ? electron.webUtils.getPathForFile(file)
+                : null;
+            if (absolutePath && typeof absolutePath === 'string') {
+                return absolutePath;
+            }
+        } catch (_) {
+        }
+    }
 
     // Fallback para webkitRelativePath se disponível
     if (file.webkitRelativePath && typeof file.webkitRelativePath === 'string' && file.webkitRelativePath !== '') {

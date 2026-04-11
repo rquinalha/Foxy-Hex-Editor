@@ -463,6 +463,18 @@
             });
 
             // Handler para comandos do menu Arquivo
+            function createElectronFileLike(fileName, filePath, fileSize, allData) {
+                const bytes = allData instanceof Uint8Array ? allData : new Uint8Array(allData || 0);
+                return {
+                    name: fileName,
+                    path: filePath,
+                    size: fileSize,
+                    type: 'application/octet-stream',
+                    lastModified: Date.now(),
+                    arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+                };
+            }
+
             ipcRenderer.on('menu-open-file', async () => {
                 try {
                     const result = await ipcRenderer.invoke('show-open-dialog', {
@@ -514,16 +526,12 @@
                                 allData.set(chunkResult.data, start);
                             }
                             
-                            // Criar objeto File-like com os dados
-                            const fileBlob = new Blob([allData]);
-                            fileBlob.name = fileName;
-                            fileBlob.path = filePath;
-                            fileBlob.size = fileSize;
+                            const fileObject = createElectronFileLike(fileName, filePath, fileSize, allData);
                             
                             if (window.fileTabManager && typeof window.fileTabManager.openFiles === 'function') {
-                                await window.fileTabManager.openFiles([fileBlob]);
+                                await window.fileTabManager.openFiles([fileObject]);
                             } else if (window.hexEditor && typeof window.hexEditor.loadFile === 'function') {
-                                await window.hexEditor.loadFile(fileBlob);
+                                await window.hexEditor.loadFile(fileObject);
                             }
                         }
                     }
@@ -817,16 +825,12 @@
                             allData.set(result.data, start);
                         }
                         
-                        // Criar objeto File-like com os dados
-                        const fileBlob = new Blob([allData]);
-                        fileBlob.name = name;
-                        fileBlob.path = path;
-                        fileBlob.size = size;
+                        const fileObject = createElectronFileLike(name, path, size, allData);
                         
                         if (window.fileTabManager && typeof window.fileTabManager.openFiles === 'function') {
-                            await window.fileTabManager.openFiles([fileBlob]);
+                            await window.fileTabManager.openFiles([fileObject]);
                         } else if (window.hexEditor && typeof window.hexEditor.loadFile === 'function') {
-                            await window.hexEditor.loadFile(fileBlob);
+                            await window.hexEditor.loadFile(fileObject);
                         }
                     }
                 } catch (error) {

@@ -411,90 +411,126 @@ async copySelection() {
     return this;
 },
 
-pasteData() {
+pasteData(format = 'auto') {
     const activeElement = document.activeElement;
     if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
         return;
     }
 
     if (this.editMode === 'edit') {
-        this.pasteHexData();
+        const effectiveFormat = (format === 'auto' && this.activePanel === 'ascii') ? 'ascii' : format;
+        this.pasteHexData(effectiveFormat);
         return;
     }
 
     this.pasteToSearch();
 },
 
-pasteHexData() {
-    navigator.clipboard.readText().then((text) => {
-        const hexBytes = this.parseHexString(text);
-        if (hexBytes.length > 0) {
-            if (this.insertMode) {
-                this.insertBytesAt(this.cursorPosition, hexBytes, 'Paste hex data');
-            } else {
-                this.overwriteBytesAt(this.cursorPosition, hexBytes, 'Paste hex data');
-            }
-            this.setCursor(this.cursorPosition + hexBytes.length, null, false);
-            if (window.notificationSystem) {
-                window.notificationSystem.success(`📥 Colado como HEX (${hexBytes.length} bytes)`, 'Colagem');
-            }
-        } else {
-            const currentTable = this.charTables && this.currentCharTable ? this.charTables[this.currentCharTable] : null;
-            let bytes = null;
-            if (this.charDecoder16 && (currentTable && (currentTable.type === '16-bit' || currentTable.type === 'UTF-16'))) {
-                bytes = this.textTo16bitBytes(text);
-            } else if (currentTable && ((currentTable.type === 'shift-jis' || currentTable.type === 'shift_jis') || currentTable._isShiftJIS === true)) {
-                bytes = this.textToShiftJISBytes(text, true) || this.textToShiftJISBytes(text, false);
-            }
+pasteHexData(format = 'auto') {
+    if (!navigator.clipboard || !navigator.clipboard.readText) {
+        if (window.notificationSystem) {
+            window.notificationSystem.error('Área de transferência não acessível.', 'Erro');
+        }
+        return;
+    }
 
-            if (Array.isArray(bytes) ? bytes.length > 0 : (bytes && bytes.length > 0)) {
-                if (this.insertMode) {
-                    this.insertBytesAt(this.cursorPosition, bytes, 'Paste text as encoded bytes');
-                } else {
-                    this.overwriteBytesAt(this.cursorPosition, bytes, 'Paste text as encoded bytes');
-                }
-                this.setCursor(this.cursorPosition + bytes.length, null, false);
-                if (window.notificationSystem) {
-                    const mode = this.charDecoder16 ? 'UTF-16/16-bit' : 'Shift-JIS';
-                    window.notificationSystem.success(`📥 Colado como ${mode} (${bytes.length} bytes)`, 'Colagem');
-                }
-            } else if (!this.charDecoder16 && (!currentTable || (currentTable.type !== 'shift-jis' && currentTable.type !== 'shift_jis'))) {
-                const utf8 = Array.from(new TextEncoder().encode(text));
-                if (this.insertMode) {
-                    this.insertBytesAt(this.cursorPosition, utf8, 'Paste UTF-8 text');
-                } else {
-                    this.overwriteBytesAt(this.cursorPosition, utf8, 'Paste UTF-8 text');
-                }
-                this.setCursor(this.cursorPosition + utf8.length, null, false);
-                if (window.notificationSystem) {
-                    window.notificationSystem.warning(`📥 Colado como UTF-8 (${utf8.length} bytes)`, 'Colagem');
-                }
+    navigator.clipboard.readText().then((text) => {
+        if (!text) return;
+
+        const currentTable = this.charTables && this.currentCharTable ? this.charTables[this.currentCharTable] : null;
+        const is16bit = !!(currentTable && (currentTable.type === '16-bit' || currentTable.type === 'UTF-16'));
+        const isShiftJIS = !!(currentTable && ((currentTable.type === 'shift-jis' || currentTable.type === 'shift_jis') || currentTable._isShiftJIS === true));
+
+        let bytes = [];
+        let detectedMode = '';
+
+        const tryHex = () => {
+            const hexBytes = this.parseHexString(text);
+            if (hexBytes.length > 0) {
+                bytes = hexBytes;
+                detectedMode = 'HEX';
+                return true;
+            }
+            return false;
+        };
+
+        const tryText = () => {
+            if (is16bit && typeof this.textTo16bitBytes === 'function') {
+                bytes = this.textTo16bitBytes(text);
+                detectedMode = 'UTF-16/16-bit';
+            } else if (isShiftJIS && typeof this.textToShiftJISBytes === 'function') {
+                bytes = this.textToShiftJISBytes(text, true) || this.textToShiftJISBytes(text, false);
+                detectedMode = 'Shift-JIS';
+            } else {
+                bytes = Array.from(new TextEncoder().encode(text));
+                detectedMode = 'UTF-8/ASCII';
+            }
+            return bytes && bytes.length > 0;
+        };
+
+        if (format === 'hex') {
+            tryHex();
+        } else if (format === 'ascii') {
+            tryText();
+        } else {
+            if (this.activePanel === 'ascii') {
+                if (!tryText()) tryHex();
+            } else {
+                if (!tryHex()) tryText();
             }
         }
-    }).catch(() => {});
+
+        if (bytes && bytes.length > 0) {
+            if (this.insertMode) {
+                this.insertBytesAt(this.cursorPosition, bytes, 'Paste data');
+            } else {
+                this.overwriteBytesAt(this.cursorPosition, bytes, 'Paste data');
+            }
+            this.setCursor(this.cursorPosition + bytes.length, null, false);
+            
+            if (window.notificationSystem) {
+                window.notificationSystem.success(`📥 Colado como ${detectedMode} (${bytes.length} bytes)`, 'Colagem');
+            }
+        }
+    }).catch((err) => {
+        console.error('Erro ao ler clipboard:', err);
+    });
 },
 
 pasteToSearch() {
+    if (!navigator.clipboard || !navigator.clipboard.readText) return;
+
     navigator.clipboard.readText().then((text) => {
-        const searchInput = document.getElementById('search-input');
-        if (searchInput) {
-            searchInput.value = text;
-            searchInput.focus();
-            searchInput.select();
+        if (!text) return;
+        
+        if (typeof this.showFindReplaceModal === 'function') {
+            this.showFindReplaceModal();
+        }
+
+        const findInput = document.getElementById('find-input');
+        if (findInput) {
+            findInput.value = text;
+            findInput.focus();
+            findInput.select();
+            findInput.dispatchEvent(new Event('input', { bubbles: true }));
         }
     }).catch(() => {
-        window.notificationSystem.error('Falha ao ler a área de transferência. Por favor, cole manualmente.', 'Erro de Clipboard');
+        if (window.notificationSystem) {
+            window.notificationSystem.error('Falha ao ler a área de transferência.', 'Erro');
+        }
     });
 },
 
 parseHexString(text) {
-    const cleanText = text.replace(/^(hex|0x|\\x)/i, '').replace(/\s+/g, '');
+    if (!text) return [];
+    const cleanText = text.replace(/^(hex|0x|\\x)/i, '').replace(/[\s,]+/g, '');
+    if (!/^[0-9A-Fa-f]+$/.test(cleanText) || cleanText.length % 2 !== 0) {
+        return [];
+    }
+
     const bytes = [];
     for (let i = 0; i < cleanText.length; i += 2) {
-        const hexByte = cleanText.substr(i, 2);
-        if (hexByte.length === 2 && /^[0-9A-Fa-f]{2}$/.test(hexByte)) {
-            bytes.push(parseInt(hexByte, 16));
-        }
+        bytes.push(parseInt(cleanText.substr(i, 2), 16));
     }
     return bytes;
 }
