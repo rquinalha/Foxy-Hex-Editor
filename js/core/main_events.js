@@ -287,15 +287,6 @@ if (this._contentDoubleClickHandler) {
         const offset = target?.dataset?.offset;
         const panel = target?.dataset?.panel;
 
-        if (this.canUseInsertCursor() && offset && panel && e.button === 0 && !e.shiftKey) {
-            e.preventDefault();
-            e.stopPropagation();
-            const insertPos = this.resolveInsertCursorPosition(target, e, parseInt(offset, 10));
-            this.selectionState.isDragging = false;
-            this.setInsertCursor(insertPos, panel);
-            return;
-        }
-
         return originalContentMouseDownHandler(e);
     };
 

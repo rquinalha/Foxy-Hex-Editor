@@ -369,13 +369,6 @@ EnhancedLargeFileHandler.prototype.setupContentDelegatedEvents = function(conten
                 return;
             }
 
-            if (this.hexEditor.canUseInsertCursor && this.hexEditor.canUseInsertCursor() && !e.shiftKey) {
-                const insertPos = this.hexEditor.resolveInsertCursorPosition(info.target, e, info.offset);
-                this.hexEditor.setInsertCursor(insertPos, info.panel);
-                this.dragState.isPending = false;
-                return;
-            }
-
             if (e.shiftKey) {
                 const normalized = this.hexEditor.getSelectionRangeForPanel(info.offset, info.panel);
                 this.hexEditor.selectionEnd = info.panel === 'hex' && this.hexEditor.isCurrentTable16Bit()
@@ -415,10 +408,6 @@ EnhancedLargeFileHandler.prototype.setupContentDelegatedEvents = function(conten
                 document.removeEventListener('mouseup', onMouseUp);
                 if (this.dragState.isPending) {
                     this.dragState.isPending = false;
-                    if (!this.dragState.isDragging) {
-                        this.hexEditor.setCursor(info.offset, info.panel, false);
-                        this.hexEditor.renderCurrentView(true);
-                    }
                 }
             };
 
