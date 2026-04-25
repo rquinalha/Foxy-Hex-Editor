@@ -303,6 +303,7 @@ if (this.nibblePosition === 0) {
 
 handleAsciiEdit(char) {
 if (this.editMode !== 'edit') return;
+this.nibblePosition = 0;
 
 const currentTable = this.charTables && this.charTables[this.currentCharTable];
 const is16bit = currentTable && (currentTable.type === '16-bit' || currentTable.type === 'UTF-16');
@@ -471,13 +472,19 @@ if (encodedByCurrentTable && encodedByCurrentTable.length > 0) {
                 'Custom table text edit'
             );
             if (changed) {
-                const nextPos = Math.max(0, normalized.start + Math.max(0, payload.length - 1));
+                const nextPos = Math.min(
+                    normalized.start + payload.length,
+                    Math.max(0, this.getDataLength() - 1)
+                );
                 this.setCursor(nextPos, 'ascii', false);
             }
         } else {
             changed = this.overwriteBytesAt(this.cursorPosition, payload, 'Custom table text edit');
             if (changed) {
-                const nextPos = Math.max(0, this.cursorPosition + Math.max(0, payload.length - 1));
+                const nextPos = Math.min(
+                    this.cursorPosition + payload.length,
+                    Math.max(0, this.getDataLength() - 1)
+                );
                 this.setCursor(nextPos, 'ascii', false);
             }
         }
