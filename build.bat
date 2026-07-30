@@ -105,25 +105,28 @@ exit /b 0
 
 :install_deps
 if /i "!LANG!"=="PT" (
-    echo !BLUE! Instalando dependencias ^(npm install^)... 
+    echo !BLUE! Verificando modulos compartilhados...
 ) else (
-    echo !BLUE! Installing dependencies ^(npm install^)... 
+    echo !BLUE! Checking shared modules...
 )
 
-call npm install
-if errorlevel 1 (
+if not exist "node_modules\electron\package.json" (
     if /i "!LANG!"=="PT" (
-        echo !RED! Erro ao instalar dependencias.
+        echo !RED! Modulos Electron nao encontrados.
+        echo !BLUE! Rode: D:\Claude\_electron_shared\Instalar-Modulos.bat
+        echo !BLUE! Depois: D:\Claude\_electron_shared\Ligar-Apps.bat
     ) else (
-        echo !RED! Error installing dependencies.
+        echo !RED! Electron modules not found.
+        echo !BLUE! Run: D:\Claude\_electron_shared\Instalar-Modulos.bat
+        echo !BLUE! Then: D:\Claude\_electron_shared\Ligar-Apps.bat
     )
     exit /b 1
 )
 
 if /i "!LANG!"=="PT" (
-    echo !GREEN! Dependencias instaladas.
+    echo !GREEN! Modulos compartilhados OK.
 ) else (
-    echo !GREEN! Dependencies installed.
+    echo !GREEN! Shared modules OK.
 )
 exit /b 0
 
