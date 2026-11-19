@@ -1,13 +1,13 @@
 @font-face {
     font-family: 'Arimo Local';
-    src: url('../assets/fonts/Arimo-Regular.ttf') format('truetype');
+    src: url('../assets/fonts/Arimo-mono.ttf') format('truetype');
     font-weight: 400;
     font-style: normal;
 }
 
 @font-face {
     font-family: 'Roboto Local';
-    src: url('../assets/fonts/Roboto-Regular.ttf') format('truetype');
+    src: url('../assets/fonts/roboto-mono.ttf') format('truetype');
     font-weight: 400;
     font-style: normal;
 }
@@ -911,7 +911,7 @@ body {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    background: rgba(26, 26, 46, 0.4);
+    background-color: var(--editor-hex-background, rgba(26, 26, 46, 0.4));
     position: relative;
     outline: none;
     /* Remove default focus outline */
@@ -951,6 +951,7 @@ body {
     font-size: var(--editor-font-size);
     line-height: var(--editor-line-height);
     height: var(--editor-row-height);
+    background-color: var(--editor-hex-line-background, transparent);
     transition: background 0.1s ease;
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     /* Ensure proper ordering and prevent layout shifts */
@@ -959,7 +960,23 @@ body {
 }
 
 .hex-line:hover {
-    background: rgba(255, 107, 53, 0.08);
+    background-color: var(--editor-hex-hover-background, rgba(255, 107, 53, 0.08));
+}
+
+.ascii-content {
+    background-color: var(--editor-ascii-background, transparent);
+}
+
+.ascii-line {
+    background-color: var(--editor-ascii-line-background, transparent);
+}
+
+.ascii-line:hover {
+    background-color: var(--editor-ascii-hover-background, transparent);
+}
+
+#large-file-scrollbar {
+    background-color: var(--editor-track-background, rgba(15, 15, 35, 0.9));
 }
 
 .hex-offset {

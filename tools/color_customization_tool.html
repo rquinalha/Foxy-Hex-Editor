@@ -652,8 +652,16 @@
 
                     <div class="color-section">
                         <h4 data-i18n="tool.color.manage.title" data-i18n-html>&#x1F4BE; Gerenciar ConfiguraÃ§Ãµes</h4>
+                        <form class="config-actions" onsubmit="ColorTool.savePreset(event)">
+                            <input type="text" id="custom-color-preset-name" class="modal-input" required
+                                aria-label="Nome do preset" data-i18n-placeholder="tool.color.preset.name" placeholder="Nome do preset">
+                            <button type="submit" data-i18n="tool.color.save" data-i18n-html>&#x1F4BE; Salvar</button>
+                        </form>
                         <div class="config-actions">
-                            <button onclick="ColorTool.exec('saveCustomPreset', [])" data-i18n="tool.color.save" data-i18n-html>&#x1F4BE; Salvar</button>
+                            <select id="custom-color-presets" class="custom-select" aria-label="Presets personalizados" disabled
+                                onchange="ColorTool.exec('loadCustomPreset', [this.value])">
+                                <option value="" data-i18n="tool.color.preset.saved">Carregar preset salvo</option>
+                            </select>
                             <button onclick="ColorTool.exec('exportColorConfig', [])" data-i18n="tool.color.export" data-i18n-html>&#x1F4E4; Exportar</button>
                             <button onclick="ColorTool.exec('importColorConfig', [])" data-i18n="tool.color.import" data-i18n-html>&#x1F4E5; Importar</button>
                             <button onclick="ColorTool.confirmResetAllColors()" class="danger-btn" data-i18n="tool.color.reset_all" data-i18n-html>&#x1F5D1;&#xFE0F; Resetar Tudo</button>

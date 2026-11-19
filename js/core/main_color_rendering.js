@@ -96,13 +96,14 @@ getTextColor(char) {
 
 applyColorChanges() {
     this.saveColorConfig();
+    this.saveHighlightColorPreference();
+    this.renderColorConfig();
+},
+
+renderColorConfig() {
     this.applyOffsetColors();
-    this.applyHexColors();
-    this.applyTextColors();
     this.applyBackgroundColors();
     this.applyEditorFontSettings();
-    
-    // Forçar re-renderização completa para aplicar as novas cores
     this.completeRenderWithColors(this.currentScrollPercent, true);
 },
 
@@ -133,57 +134,15 @@ applyEditorFontSettings() {
 },
 
 applyBackgroundColors() {
-    if (!this.colorConfig || !this.colorConfig.backgroundColors) return;
-    
     const bg = this.colorConfig.backgroundColors;
-    
-    // Aplicar cores de fundo ao conteúdo hex
-    const hexContent = document.querySelector('.hex-content');
-    if (hexContent) {
-        hexContent.style.background = bg.hexContent;
-    }
-    
-    // Aplicar cores de fundo às linhas hex
-    const hexLines = document.querySelectorAll('.hex-line');
-    hexLines.forEach(line => {
-        line.style.background = bg.hexLine;
-    });
-    
-    // Aplicar cores de fundo ao conteúdo ASCII
-    const asciiContent = document.querySelector('.ascii-content');
-    if (asciiContent) {
-        asciiContent.style.background = bg.asciiContent;
-    }
-    
-    // Suporte para arquivos grandes
-    const lfc = document.getElementById("large-file-viewer-container");
-    if (lfc) lfc.style.background = bg.hexContent;
-    const lsb = document.getElementById("large-file-scrollbar");
-    if (lsb) lsb.style.background = bg.track || "rgba(15, 15, 35, 0.9)";
-    
-    // Aplicar cores de fundo às linhas ASCII
-    const asciiLines = document.querySelectorAll('.ascii-line');
-    asciiLines.forEach(line => {
-        line.style.background = bg.asciiLine;
-    });
-    
-    // Adicionar CSS dinâmico para hover
-    const styleId = 'hex-editor-background-styles';
-    let styleElement = document.getElementById(styleId);
-    if (!styleElement) {
-        styleElement = document.createElement('style');
-        styleElement.id = styleId;
-        document.head.appendChild(styleElement);
-    }
-    
-    styleElement.textContent = `
-        .hex-line:hover {
-            background: ${bg.hexLineHover} !important;
-        }
-        .ascii-line:hover {
-            background: ${bg.asciiLineHover} !important;
-        }
-    `;
+    const style = document.documentElement.style;
+    style.setProperty('--editor-hex-background', bg.hexContent);
+    style.setProperty('--editor-hex-line-background', bg.hexLine);
+    style.setProperty('--editor-hex-hover-background', bg.hexLineHover);
+    style.setProperty('--editor-ascii-background', bg.asciiContent);
+    style.setProperty('--editor-ascii-line-background', bg.asciiLine);
+    style.setProperty('--editor-ascii-hover-background', bg.asciiLineHover);
+    style.setProperty('--editor-track-background', bg.track || '');
 },
 
 rgbaToHex(rgba) {

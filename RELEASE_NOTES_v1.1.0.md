@@ -12,6 +12,7 @@ English version below | Versão em português abaixo
 - Improved search and text display with custom 16-bit and Shift-JIS tables, including characters that span rows or read blocks.
 - Fixed tab reopening, Save As, and selection import targeting. Saving now warns when another program has changed the file on disk.
 - The Windows portable executable and the Linux x64 AppImage keep the app profile in `.foxy-data` beside the executable.
+- Fixed theme import, saved presets, Cancel and color resets. Background colors survive reopening files, and the bundled Arimo and Roboto fonts load correctly.
 
 ---
 
@@ -23,3 +24,4 @@ English version below | Versão em português abaixo
 - Melhoradas a busca e a exibição de texto com tabelas personalizadas de 16 bits e Shift-JIS, inclusive para caracteres que atravessam linhas ou blocos de leitura.
 - Corrigidas a reabertura de abas, a função Salvar como e a importação de seleções. O Foxy agora avisa ao detectar que outro programa alterou o arquivo em disco.
 - O executável portátil para Windows e o AppImage para Linux x64 guardam o perfil do app em `.foxy-data`, ao lado do executável.
+- Corrigidos a importação de temas, os presets salvos, o botão Cancelar e a redefinição de cores. O fundo é preservado ao reabrir arquivos, e as fontes Arimo e Roboto carregam corretamente.

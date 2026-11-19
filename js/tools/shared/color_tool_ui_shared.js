@@ -14,17 +14,26 @@
 
     function renderCustomHexList(container, customMap) {
         if (!container) return;
-        container.innerHTML = '';
+        container.replaceChildren();
         Object.entries(customMap || {}).forEach(([hex, color]) => {
             const item = document.createElement('div');
             item.className = 'custom-hex-item';
             item.dataset.hex = hex;
-            item.innerHTML = `
-                <span class="hex-value">${hex}</span>
-                <input type="color" value="${color}">
-                <span class="color-preview" style="color: ${color}">${hex}</span>
-                <button type="button" class="remove-btn">X</button>
-            `;
+            const label = document.createElement('span');
+            label.className = 'hex-value';
+            label.textContent = hex;
+            const input = document.createElement('input');
+            input.type = 'color';
+            input.value = color;
+            const preview = document.createElement('span');
+            preview.className = 'color-preview';
+            preview.style.color = color;
+            preview.textContent = hex;
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'remove-btn';
+            remove.textContent = 'X';
+            item.append(label, input, preview, remove);
             container.appendChild(item);
         });
     }
@@ -37,6 +46,13 @@
             family: 'jetbrains-mono',
             size: 15
         };
+
+        const presets = root.getElementById('custom-color-presets');
+        if (presets) {
+            const names = state.customPresetNames || [];
+            presets.replaceChildren(presets.options[0], ...names.map(name => new Option(name, name)));
+            presets.disabled = names.length === 0;
+        }
 
         const offsetColor = root.getElementById('offset-color');
         if (offsetColor) offsetColor.value = cfg.offsetColor || '#ffd700';
@@ -67,6 +83,13 @@
 
         const textTagsColor = root.getElementById('text-tags-color');
         if (textTagsColor) textTagsColor.value = cfg.textColors.tags;
+
+        for (const type of ['dte', 'mte']) {
+            const input = root.getElementById(`text-${type}-color`);
+            const preview = root.getElementById(`text-${type}-preview`);
+            if (input) input.value = cfg.textColors[type];
+            if (preview) preview.style.color = cfg.textColors[type];
+        }
 
         if (cfg.backgroundColors) {
             const bg = cfg.backgroundColors;
@@ -133,7 +156,8 @@
             const previewFonts = {
                 'jetbrains-mono': '"JetBrains Mono Local", "JetBrains Mono", monospace',
                 'source-code-pro': '"Source Code Pro Local", "Source Code Pro", monospace',
-                'roboto-mono': '"Roboto Mono Local", "Roboto Mono", monospace',
+                arimo: '"Arimo Local", Arimo, sans-serif',
+                roboto: '"Roboto Local", Roboto, sans-serif',
                 'system-mono': 'Consolas, "Cascadia Mono", "Courier New", monospace'
             };
             fontPreviewSample.style.fontFamily = previewFonts[fontSettings.family] || previewFonts['jetbrains-mono'];

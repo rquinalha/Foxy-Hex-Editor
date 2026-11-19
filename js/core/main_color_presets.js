@@ -1,37 +1,90 @@
+const COLOR_PRESET_KEY = 'customColorPresets';
+
+function isColorConfigObject(value) {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function readThemeColor(value, allowAlpha = false) {
+    if (typeof value === 'string' && /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value)) {
+        return value.length === 4 ? value.replace(/[\da-f]/gi, digit => digit.repeat(2)) : value;
+    }
+    if (allowAlpha && typeof value === 'string' && /^(transparent|rgba?\([0-9.,\s]+\))$/i.test(value)
+        && CSS.supports('color', value)) return value;
+    throw new Error('Cor inválida na configuração.');
+}
+
 Object.assign(FoxyHexEditorComplete.prototype, {
+normalizeColorConfig(config) {
+    const groups = ['hexColors', 'textColors', 'backgroundColors'];
+    if (!isColorConfigObject(config) || !groups.every(key => isColorConfigObject(config[key]))) {
+        throw new Error('O arquivo precisa conter as seções de cores hexadecimais, de texto e de fundo.');
+    }
+
+    const theme = structuredClone(this.defaultColorConfig);
+    if (Object.hasOwn(config, 'offsetColor')) theme.offsetColor = readThemeColor(config.offsetColor);
+    for (const group of groups) {
+        const allowAlpha = group === 'backgroundColors';
+        for (const key of Object.keys(theme[group])) {
+            if (key !== 'custom' && Object.hasOwn(config[group], key)) {
+                theme[group][key] = readThemeColor(config[group][key], allowAlpha);
+            }
+        }
+    }
+    if (Object.hasOwn(config.backgroundColors, 'track')) {
+        theme.backgroundColors.track = readThemeColor(config.backgroundColors.track, true);
+    }
+    if (Object.hasOwn(config.hexColors, 'custom')) {
+        if (!isColorConfigObject(config.hexColors.custom)) throw new Error('Cores por byte inválidas.');
+        for (const [hex, color] of Object.entries(config.hexColors.custom)) {
+            if (!/^[0-9a-f]{2}$/i.test(hex)) throw new Error('Byte inválido na configuração de cores.');
+            theme.hexColors.custom[hex.toUpperCase()] = readThemeColor(color);
+        }
+    }
+    if (Object.hasOwn(config, 'fontSettings')) {
+        const font = config.fontSettings;
+        const families = ['jetbrains-mono', 'source-code-pro', 'arimo', 'roboto', 'system-mono'];
+        const size = Number(font?.size);
+        if (!families.includes(font?.family) || !Number.isInteger(size) || size < 12 || size > 18) {
+            throw new Error('Fonte ou tamanho inválido na configuração.');
+        }
+        theme.fontSettings = { family: font.family, size };
+    }
+    return theme;
+},
+
+setColorTheme(config) {
+    this.colorConfig = config;
+    this.originalHexColors = { ...config.hexColors };
+    this.originalTextColors = { ...config.textColors };
+    this.originalBackgroundColors = { ...config.backgroundColors };
+    this.originalOffsetColor = config.offsetColor;
+    this.renderColorConfig();
+},
+
+getCustomColorPresets() {
+    try {
+        const presets = JSON.parse(localStorage.getItem(COLOR_PRESET_KEY) || '{}');
+        return isColorConfigObject(presets) ? presets : {};
+    } catch {
+        return {};
+    }
+},
+
+getColorThemeForExport() {
+    return { ...this.colorConfig, highlightColor: this.currentHighlightColor };
+},
+
+previewImportedColorTheme(config) {
+    const theme = this.normalizeColorConfig(config);
+    if (typeof config.highlightColor === 'string' && Object.hasOwn(this.highlightColorPresets, config.highlightColor)) {
+        this.currentHighlightColor = config.highlightColor;
+    }
+    this.setColorTheme(theme);
+},
+
 loadPreset(presetName) {
     const presets = {
-        default: {
-            offsetColor: '#ffd700',
-            hexColors: {
-                nulls: '#ff6b35',
-                numbers: '#4fc3f7',
-                letters: '#4fc3f7',
-                special: '#4fc3f7',
-                custom: {}
-            },
-            textColors: {
-                numbers: '#2196F3',
-                letters: '#4CAF50',
-                punctuation: '#FFD700',
-                spaces: '#666666',
-                tags: '#FFFFFF',
-                dte: '#9C27B0',
-                mte: '#E91E63'
-            },
-            backgroundColors: {
-                hexContent: 'rgba(26, 26, 46, 0.4)',
-                hexLine: 'transparent',
-                hexLineHover: 'rgba(255, 107, 53, 0.08)',
-                asciiContent: 'rgba(26, 26, 46, 0.4)',
-                asciiLine: 'transparent',
-                asciiLineHover: 'rgba(255, 107, 53, 0.08)'
-            },
-            fontSettings: {
-                family: 'jetbrains-mono',
-                size: 15
-            }
-        },
+        default: this.defaultColorConfig,
         black: {
             offsetColor: '#ffd700',
             hexColors: {
@@ -258,28 +311,8 @@ loadPreset(presetName) {
         }
     };
     
-    if (presets[presetName]) {
-        // Salvar cores originais do preset para uso no reset
-        this.originalHexColors = {
-            nulls: presets[presetName].hexColors.nulls,
-            numbers: presets[presetName].hexColors.numbers,
-            letters: presets[presetName].hexColors.letters,
-            special: presets[presetName].hexColors.special
-        };
-        this.originalOffsetColor = presets[presetName].offsetColor || '#ffd700';
-        
-        this.colorConfig = JSON.parse(JSON.stringify(presets[presetName]));
-        this.loadColorConfigToUI();
-        this.updateColorPreviews();
-        this.applyOffsetColors();
-        this.applyBackgroundColors();
-        if (typeof this.applyEditorFontSettings === 'function') {
-            this.applyEditorFontSettings();
-        }
-        this.notifyColorToolWindow();
-        
-        // Forçar re-renderização para mostrar as mudanças imediatamente
-        this.completeRenderWithColors(this.currentScrollPercent, true);
+    if (Object.hasOwn(presets, presetName)) {
+        this.setColorTheme(structuredClone(presets[presetName]));
     }
 },
 
@@ -379,21 +412,27 @@ loadBackgroundOnlyPreset(presetName) {
 
     if (presets[presetName]) {
         this.colorConfig.backgroundColors = JSON.parse(JSON.stringify(presets[presetName].backgroundColors));
+        this.originalBackgroundColors = { ...this.colorConfig.backgroundColors };
         this.loadColorConfigToUI();
         this.updateColorPreviews();
         this.applyBackgroundColors();
-        this.notifyColorToolWindow();
         this.completeRenderWithColors(this.currentScrollPercent, true);
     }
 },
 
-saveCustomPreset() {
-    const name = prompt('Digite um nome para salvar esta configuração:');
-    if (name) {
-        const customPresets = JSON.parse(localStorage.getItem('customColorPresets') || '{}');
-        customPresets[name] = JSON.parse(JSON.stringify(this.colorConfig));
-        localStorage.setItem('customColorPresets', JSON.stringify(customPresets));
-        alert(`Configuração "${name}" salva com sucesso!`);
+saveCustomPreset(name) {
+    if (typeof name !== 'string' || !name.trim()) return;
+    const presets = this.getCustomColorPresets();
+    localStorage.setItem(COLOR_PRESET_KEY, JSON.stringify({ ...presets, [name.trim()]: this.getColorThemeForExport() }));
+},
+
+loadCustomPreset(name) {
+    const presets = this.getCustomColorPresets();
+    if (!Object.hasOwn(presets, name)) return;
+    try {
+        this.previewImportedColorTheme(presets[name]);
+    } catch (error) {
+        this.showNotification(error.message, 'error');
     }
 },
 
@@ -402,7 +441,7 @@ exportColorConfig() {
     if (typeof require !== 'undefined' && typeof process !== 'undefined') {
         const { ipcRenderer } = require('electron');
         
-        const config = JSON.stringify(this.colorConfig, null, 2);
+        const config = JSON.stringify(this.getColorThemeForExport(), null, 2);
         
         // Usar diálogo nativo do Electron
         ipcRenderer.invoke('show-save-dialog', {
@@ -438,7 +477,7 @@ exportColorConfig() {
         });
     } else {
         // Fallback para navegador
-        const config = JSON.stringify(this.colorConfig, null, 2);
+        const config = JSON.stringify(this.getColorThemeForExport(), null, 2);
         const blob = new Blob([config], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         
@@ -451,113 +490,25 @@ exportColorConfig() {
     }
 },
 
-importColorConfig() {
-    // Verificar se estamos no Electron
-    if (typeof require !== 'undefined' && typeof process !== 'undefined') {
-        const { ipcRenderer } = require('electron');
-        
-        // Usar diálogo nativo do Electron
-        ipcRenderer.invoke('show-open-dialog', {
+async importColorConfig(isCurrent = () => true) {
+    const { ipcRenderer } = require('electron');
+    try {
+        const result = await ipcRenderer.invoke('show-open-dialog', {
             title: 'Importar Configuração de Cores',
-            filters: [
-                { name: 'Cores Customizadas', extensions: ['json'] }
-            ]
-        }).then(result => {
-            if (!result.canceled && result.filePaths.length > 0) {
-                const filePath = result.filePaths[0];
-                
-                // Ler o arquivo usando fs
-                const fs = require('fs');
-                try {
-                    const content = fs.readFileSync(filePath, 'utf8');
-                    const config = JSON.parse(content);
-                    if (!config.offsetColor) {
-                        config.offsetColor = '#ffd700';
-                    }
-                    if (!config.fontSettings) {
-                        config.fontSettings = { family: 'jetbrains-mono', size: 15 };
-                    }
-                    this.colorConfig = config;
-                    this.loadColorConfigToUI();
-                    this.updateColorPreviews();
-                    this.applyOffsetColors();
-                    if (typeof this.applyEditorFontSettings === 'function') {
-                        this.applyEditorFontSettings();
-                    }
-                    this.notifyColorToolWindow();
-                    
-                    if (window.notificationSystem) {
-                        window.notificationSystem.success('Configuração importada com sucesso!', 'Importação Concluída');
-                    } else {
-                        alert('Configuração importada com sucesso!');
-                    }
-                } catch (error) {
-                    if (window.notificationSystem) {
-                        window.notificationSystem.error('Erro ao importar configuração: ' + error.message, 'Erro de Importação');
-                    } else {
-                        alert('Erro ao importar configuração: ' + error.message);
-                    }
-                }
-            }
-        }).catch(error => {
-            if (window.notificationSystem) {
-                window.notificationSystem.error('Erro ao abrir diálogo: ' + error.message, 'Erro de Diálogo');
-            } else {
-                alert('Erro ao abrir diálogo: ' + error.message);
-            }
+            filters: [{ name: 'Cores Customizadas', extensions: ['json'] }]
         });
-    } else {
-        // Fallback para navegador
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
-        
-        input.onchange = (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    try {
-                        const config = JSON.parse(e.target.result);
-                        if (!config.offsetColor) {
-                            config.offsetColor = '#ffd700';
-                        }
-                        if (!config.fontSettings) {
-                            config.fontSettings = { family: 'jetbrains-mono', size: 15 };
-                        }
-                        this.colorConfig = config;
-                        this.loadColorConfigToUI();
-                        this.updateColorPreviews();
-                        this.applyOffsetColors();
-                        if (typeof this.applyEditorFontSettings === 'function') {
-                            this.applyEditorFontSettings();
-                        }
-                        alert('Configuração importada com sucesso!');
-                    } catch (error) {
-                        alert('Erro ao importar configuração. Verifique se o arquivo é válido.');
-                    }
-                };
-                reader.readAsText(file);
-            }
-        };
-        
-        input.click();
+        if (result.canceled || !result.filePaths.length || !isCurrent()) return;
+        const content = await require('node:fs/promises').readFile(result.filePaths[0], 'utf8');
+        if (!isCurrent()) return;
+        this.previewImportedColorTheme(JSON.parse(content.replace(/^\uFEFF/, '')));
+    } catch (error) {
+        if (isCurrent()) this.showNotification('Erro ao importar configuração: ' + error.message, 'error');
     }
 },
 
 resetAllColors() {
-    if (window.notificationSystem && typeof window.notificationSystem.confirm === 'function') {
-        window.notificationSystem.confirm(
-            'Tem certeza que deseja resetar todas as cores para os valores padrão?',
-            'Resetar cores',
-            () => this.loadPreset('default')
-        );
-        return;
-    }
-
-    if (confirm('Tem certeza que deseja resetar todas as cores para os valores padrão?')) {
-        this.loadPreset('default');
-    }
+    this.currentHighlightColor = 'default';
+    this.loadPreset('default');
 },
 
 saveColorConfig() {
@@ -565,38 +516,16 @@ saveColorConfig() {
 },
 
 loadColorConfig() {
-    const saved = localStorage.getItem('hexEditorColorConfig');
-    if (saved) {
-        try {
-            this.colorConfig = JSON.parse(saved);
-            if (!this.colorConfig.offsetColor) {
-                this.colorConfig.offsetColor = '#ffd700';
-            }
-            if (!this.colorConfig.fontSettings) {
-                this.colorConfig.fontSettings = { family: 'jetbrains-mono', size: 15 };
-            }
-            this.originalHexColors = {
-                nulls: this.colorConfig.hexColors?.nulls || '#ff6b35',
-                numbers: this.colorConfig.hexColors?.numbers || '#4fc3f7',
-                letters: this.colorConfig.hexColors?.letters || '#4fc3f7',
-                special: this.colorConfig.hexColors?.special || '#4fc3f7'
-            };
-            this.originalOffsetColor = this.colorConfig.offsetColor || '#ffd700';
-            this.applyOffsetColors();
-            // Garantir que as cores de fundo sejam aplicadas
-            if (this.colorConfig.backgroundColors) {
-                this.applyBackgroundColors();
-            }
-            if (typeof this.applyEditorFontSettings === 'function') {
-                this.applyEditorFontSettings();
-            }
-        } catch (error) {
-            this.loadPreset('default');
+    try {
+        const saved = localStorage.getItem('hexEditorColorConfig');
+        if (saved) {
+            this.setColorTheme(this.normalizeColorConfig(JSON.parse(saved)));
+            return;
         }
-    } else {
-        // Se não há configuração salva, carregar preset padrão
-        this.loadPreset('default');
+    } catch {
+        // Uma configuração incompleta ou inválida não deve impedir a abertura.
     }
+    this.loadPreset('default');
 },
 
 });

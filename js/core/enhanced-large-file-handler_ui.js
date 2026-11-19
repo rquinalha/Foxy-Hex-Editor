@@ -183,19 +183,12 @@ EnhancedLargeFileHandler.prototype.setupContainerWithScrollbar = function(contai
             return;
         }
 
-        const bgColors = this.hexEditor.colorConfig?.backgroundColors || {
-            hexContent: 'rgba(26, 26, 46, 0.4)',
-            track: 'rgba(15, 15, 35, 0.9)',
-            thumb: 'linear-gradient(135deg, #ff6b35, #f7931e)'
-        };
-
         container.style.cssText = `
             height: 100%;
             min-height: 0;
             overflow: hidden;
             position: relative;
-            background: ${bgColors.hexContent};
-            font-family: 'JetBrains Mono', monospace;
+            font-family: var(--editor-font-family);
             outline: none;
         `;
         container.setAttribute('tabindex', '0');
@@ -213,7 +206,6 @@ EnhancedLargeFileHandler.prototype.setupContainerWithScrollbar = function(contai
         scrollbar.id = 'large-file-scrollbar';
         scrollbar.style.cssText = `
             position: absolute; right: 0; top: 0; width: 20px; height: 100%;
-            background: ${bgColors.track || 'rgba(15, 15, 35, 0.9)'};
             border-left: 1px solid rgba(255, 255, 255, 0.1);
             z-index: 1000;
         `;

@@ -16,17 +16,25 @@ window.ColorTool = {
             window.notificationSystem.confirm(
                 message,
                 title,
-                () => this.exec('loadPreset', ['default'])
+                () => this.exec('resetAllColors', [])
             );
             return;
         }
 
         if (window.confirm(message)) {
-            this.exec('loadPreset', ['default']);
+            this.exec('resetAllColors', []);
         }
     },
     close() {
         ipcRenderer.send('close-color-customization-window');
+    },
+    savePreset(event) {
+        event.preventDefault();
+        const input = document.getElementById('custom-color-preset-name');
+        const name = input.value.trim();
+        if (!name) return;
+        this.exec('saveCustomPreset', [name]);
+        input.value = '';
     },
     switchTab(tabName) {
         document.querySelectorAll('.tab-btn').forEach((btn) => btn.classList.remove('active'));

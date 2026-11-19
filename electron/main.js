@@ -340,29 +340,32 @@ ipcMain.on('open-color-customization-window', () => {
 
     colorCustomizationWindow.on('closed', () => {
         colorCustomizationWindow = null;
+        if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+            mainWindow.webContents.send('color-tool-closed');
+        }
     });
 });
 
-ipcMain.on('close-color-customization-window', () => {
-    if (colorCustomizationWindow && !colorCustomizationWindow.isDestroyed()) {
+ipcMain.on('close-color-customization-window', (event) => {
+    if (event.sender === colorCustomizationWindow?.webContents) {
         colorCustomizationWindow.close();
     }
 });
 
-ipcMain.on('color-tool-ready', () => {
-    if (mainWindow) {
+ipcMain.on('color-tool-ready', (event) => {
+    if (event.sender === colorCustomizationWindow?.webContents && mainWindow) {
         mainWindow.webContents.send('color-tool-pull-state');
     }
 });
 
 ipcMain.on('color-tool-exec', (event, payload) => {
-    if (mainWindow) {
+    if (event.sender === colorCustomizationWindow?.webContents && mainWindow) {
         mainWindow.webContents.send('color-tool-run', payload);
     }
 });
 
 ipcMain.on('color-tool-push-state', (event, state) => {
-    if (colorCustomizationWindow && !colorCustomizationWindow.isDestroyed()) {
+    if (event.sender === mainWindow?.webContents && colorCustomizationWindow && !colorCustomizationWindow.isDestroyed()) {
         colorCustomizationWindow.webContents.send('color-tool-init', state);
     }
 });

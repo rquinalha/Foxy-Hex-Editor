@@ -14,16 +14,6 @@ hideColorCustomizationModal() {
     } catch (e) {}
 },
 
-notifyColorToolWindow() {
-    try {
-        const { ipcRenderer } = require('electron');
-        ipcRenderer.send('color-tool-push-state', {
-            colorConfig: JSON.parse(JSON.stringify(this.colorConfig)),
-            currentHighlightColor: this.currentHighlightColor
-        });
-    } catch (e) {}
-},
-
 switchColorTab(tabName) {
     // Remover classe active de todas as tabs
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
@@ -222,18 +212,11 @@ resetHexColor(type) {
 },
 
 resetTextColor(type) {
-    const defaultColors = {
-        numbers: '#2196F3',
-        letters: '#ffffff',
-        punctuation: '#ffd700',
-        spaces: '#666666',
-        tags: '#9C27B0',
-        dte: '#9C27B0',
-        mte: '#E91E63'
-    };
+    const defaultColors = this.originalTextColors || this.defaultColorConfig.textColors;
     
     this.colorConfig.textColors[type] = defaultColors[type];
-    document.getElementById(`text-${type}-color`).value = defaultColors[type];
+    const colorInput = document.getElementById(`text-${type}-color`);
+    if (colorInput) colorInput.value = defaultColors[type];
     this.updateColorPreviews();
     this.applyTextColors();
     
@@ -275,9 +258,6 @@ selectHighlightColor(colorName) {
     
     // Aplicar nova cor a todas as marcações existentes
     this.applyHighlightColors();
-    
-    // Salvar preferência
-    this.saveHighlightColorPreference();
     
     // Mostrar notificação
     this.showNotification(`Cor das marcações alterada para: ${this.getHighlightColorDisplayName(colorName)}`, 'success');
@@ -381,12 +361,22 @@ updateCustomHexList() {
     Object.entries(this.colorConfig.hexColors.custom).forEach(([hex, color]) => {
         const item = document.createElement('div');
         item.className = 'custom-hex-item';
-        item.innerHTML = `
-            <span class="hex-value">${hex}</span>
-            <input type="color" value="${color}" onchange="hexEditor.updateCustomHexColor('${hex}', this.value)">
-            <span class="color-preview" style="color: ${color}">${hex}</span>
-            <button class="remove-btn" onclick="hexEditor.removeCustomHex('${hex}')">X</button>
-        `;
+        const label = document.createElement('span');
+        label.className = 'hex-value';
+        label.textContent = hex;
+        const input = document.createElement('input');
+        input.type = 'color';
+        input.value = color;
+        input.addEventListener('change', () => this.updateCustomHexColor(hex, input.value));
+        const preview = document.createElement('span');
+        preview.className = 'color-preview';
+        preview.style.color = color;
+        preview.textContent = hex;
+        const remove = document.createElement('button');
+        remove.className = 'remove-btn';
+        remove.textContent = 'X';
+        remove.addEventListener('click', () => this.removeCustomHex(hex));
+        item.append(label, input, preview, remove);
         container.appendChild(item);
     });
 },
@@ -482,14 +472,7 @@ resetEditorFont() {
 },
 
 resetBackgroundColor(type) {
-    const defaultBackgroundColors = {
-        hexContent: '#1a1a2e',
-        hexLine: 'transparent',
-        hexLineHover: 'rgba(255, 107, 53, 0.08)',
-        asciiContent: '#1a1a2e',
-        asciiLine: 'transparent',
-        asciiLineHover: 'rgba(255, 107, 53, 0.08)'
-    };
+    const defaultBackgroundColors = this.originalBackgroundColors || this.defaultColorConfig.backgroundColors;
     
     if (defaultBackgroundColors[type]) {
         this.colorConfig.backgroundColors[type] = defaultBackgroundColors[type];

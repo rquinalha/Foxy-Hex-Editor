@@ -116,16 +116,5 @@ setTimeout(() => {
     }
 }, 100);
 
-setTimeout(() => {
-    if (window.hexEditor && typeof window.hexEditor.loadColorConfig === 'function') {
-        window.hexEditor.loadColorConfig();
-        if (typeof window.hexEditor.applyEditorFontSettings === 'function') {
-            window.hexEditor.applyEditorFontSettings();
-        }
-        window.hexEditor.applyHexColors();
-        window.hexEditor.applyTextColors();
-    }
-}, 300);
-
 bindFileInput();
 });

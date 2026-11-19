@@ -120,6 +120,7 @@ this.loadingTimeout = null;
 this.currentFileReader = null;
 this.forceFileReload = false;
 
+this.defaultColorConfig = structuredClone(this.colorConfig);
 this.init();
 }
 
@@ -247,8 +248,7 @@ container.style.cssText = `
     min-height: 0;
     overflow: hidden;
     position: relative;
-    background: rgba(26, 26, 46, 0.4);
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--editor-font-family);
     outline: none;
 `;
 container.setAttribute('tabindex', '0');
