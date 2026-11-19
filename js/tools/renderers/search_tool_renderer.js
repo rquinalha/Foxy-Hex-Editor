@@ -4,7 +4,8 @@
 const findInput = document.getElementById('find-input');
 const replaceInput = document.getElementById('replace-input');
 const caseSensitive = document.getElementById('case-sensitive');
-const regexMode = document.getElementById('regex-mode');
+const searchMode = document.getElementById('search-mode');
+const cancelButton = document.getElementById('cancel-search-btn');
 const wholeWord = document.getElementById('whole-word');
 const replaceAll = document.getElementById('replace-all');
 const searchAllTabs = document.getElementById('search-all-tabs');
@@ -37,7 +38,8 @@ function looksLikeHexSearch(value) {
 function updateWholeWordLabel() {
     if (!wholeWordLabel) return;
     const i18n = window.I18n || { t: (k) => k };
-    const key = looksLikeHexSearch(findInput?.value) ? 'tool.search.isolated_sequence' : 'tool.search.whole_word';
+    const hex = searchMode.value === 'hex' || (searchMode.value === 'auto' && looksLikeHexSearch(findInput?.value));
+    const key = hex ? 'tool.search.isolated_sequence' : 'tool.search.whole_word';
     wholeWordLabel.textContent = i18n.t(key);
 }
 
@@ -59,13 +61,19 @@ function restoreResultsScroll() {
     }
 }
 
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, character => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[character]);
+}
+
 function renderResultButton(result, isActive) {
     return `
         <button class="group-result-item ${isActive ? 'active' : ''}"
-            data-global-index="${result.globalIndex}"
+            data-global-index="${Number(result.globalIndex)}"
             style="width: 100%; text-align: left; margin-top: 6px; background: ${isActive ? 'rgba(255, 107, 53, 0.18)' : 'rgba(255,255,255,0.04)'}; color: #fff; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px; cursor: pointer;">
-            <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #ffd166;">0x${result.offsetHex}</div>
-            <div style="font-size: 12px; opacity: 0.9; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${result.preview}</div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #ffd166;">0x${escapeHtml(result.offsetHex)}</div>
+            <div style="font-size: 12px; opacity: 0.9; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(result.preview || '(sem prévia)')}</div>
         </button>
     `;
 }
@@ -80,7 +88,8 @@ function sendAction(action, data = {}) {
             findValue: findInput.value,
             replaceValue: replaceInput.value,
             caseSensitive: caseSensitive.checked,
-            regexMode: regexMode.checked,
+            mode: searchMode.value,
+            regexMode: searchMode.value === 'regex',
             wholeWord: wholeWord.checked,
             replaceAll: replaceAll.checked,
             searchAllTabs: !!searchAllTabs?.checked,
@@ -101,7 +110,8 @@ ipcRenderer.on('update-initial-state', (event, data) => {
     updateWholeWordLabel();
     if (data.replaceValue) replaceInput.value = data.replaceValue;
     if (data.caseSensitive !== undefined) caseSensitive.checked = data.caseSensitive;
-    if (data.regexMode !== undefined) regexMode.checked = data.regexMode;
+    searchMode.value = data.mode || (data.regexMode ? 'regex' : 'auto');
+    updateWholeWordLabel();
     if (data.wholeWord !== undefined) wholeWord.checked = data.wholeWord;
     if (data.replaceAll !== undefined) replaceAll.checked = data.replaceAll;
     if (data.searchAllTabs !== undefined && searchAllTabs) searchAllTabs.checked = data.searchAllTabs;
@@ -113,86 +123,55 @@ ipcRenderer.on('update-initial-state', (event, data) => {
 });
 
 function updateResultsUI() {
-    const i18n = window.I18n || { t: (k) => k };
+    const i18n = window.I18n || { t: (key) => key };
     captureResultsScroll();
-    
-    if (currentSearchResults.count === 0) {
-        resultsDisplay.innerHTML = i18n.t('tool.search.no_results_found');
+    const { count, currentIndex, searchTerm, flatResults, groupedResults, page, pages, notice, progress } = currentSearchResults;
+    const searching = typeof progress === 'number';
+    cancelButton.hidden = !searching;
+    replaceBtn.disabled = searching;
+    if (searching) {
+        resultsDisplay.textContent = `${i18n.t('tool.search.running')} ${progress}%`;
+        return;
+    }
+    const message = notice ? `<p role="status">${escapeHtml(notice)}</p>` : '';
+    if (!count) {
+        resultsDisplay.innerHTML = `${escapeHtml(i18n.t('tool.search.no_results_found'))}${message}`;
         return;
     }
 
-    const { count, currentIndex, searchTerm, flatResults, groupedResults, skippedLargeCount, searchAllTabs: isGlobalSearch } = currentSearchResults;
-    const current = currentIndex >= 0 ? currentIndex + 1 : 0;
-
-    if (isGlobalSearch && Array.isArray(groupedResults) && groupedResults.length > 0) {
-        const groupsHtml = groupedResults.map((group) => {
-            const items = group.results.map((result) => renderResultButton(result, result.globalIndex === currentIndex)).join('');
-
-            return `
-                <div style="margin-top: 10px; padding: 8px; background: rgba(255,255,255,0.03); border-radius: 10px;">
-                    <div style="display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: #ffb347; font-weight: 700;">
-                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${group.fileName}</span>
-                        <span>${group.total}</span>
-                    </div>
-                    ${items}
-                </div>
-            `;
-        }).join('');
-
-        const skippedHtml = skippedLargeCount > 0
-            ? `<div style="margin-top: 8px; font-size: 11px; color: #aab3cc;">${skippedLargeCount} aba(s) de arquivo grande ignorada(s) nesta busca.</div>`
-            : '';
-
-        resultsDisplay.innerHTML = `
-            <div class="search-match-info">
-                <span>${i18n.t('tool.search.found')} <strong>${count}</strong></span>
-                <span>${i18n.t('tool.search.current')} <strong>${current}</strong> ${i18n.t('tool.search.of')} ${count}</span>
-            </div>
-            <div style="font-size: 11px; margin-top: 5px; opacity: 0.8;">${i18n.t('tool.search.term')} "${searchTerm}"</div>
-            <div class="results-scroll-region">
-                ${groupsHtml}
-            </div>
-            ${skippedHtml}
-        `;
-        restoreResultsScroll();
-        return;
+    const groups = new Map();
+    for (const item of flatResults || []) {
+        const key = item.sessionId || item.fileName;
+        if (!groups.has(key)) groups.set(key, { title: item.fileName, results: [] });
+        groups.get(key).results.push(item);
     }
-
-    if (Array.isArray(flatResults) && flatResults.length > 0) {
-        const fileName = flatResults[0]?.fileName || 'Arquivo atual';
-        const itemsHtml = flatResults.map((result) => renderResultButton(result, result.globalIndex === currentIndex)).join('');
-
-        resultsDisplay.innerHTML = `
-            <div class="search-match-info">
-                <span>${i18n.t('tool.search.found')} <strong>${count}</strong></span>
-                <span>${i18n.t('tool.search.current')} <strong>${current}</strong> ${i18n.t('tool.search.of')} ${count}</span>
-            </div>
-            <div style="font-size: 11px; margin-top: 5px; opacity: 0.8;">${i18n.t('tool.search.term')} "${searchTerm}"</div>
-            <div class="results-scroll-region">
-                <div style="margin-top: 10px; padding: 8px; background: rgba(255,255,255,0.03); border-radius: 10px;">
-                    <div style="display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: #ffb347; font-weight: 700;">
-                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${fileName}</span>
-                        <span>${flatResults.length}</span>
-                    </div>
-                    ${itemsHtml}
-                </div>
-            </div>
-        `;
-        restoreResultsScroll();
-        return;
-    }
-
+    const lists = Array.from(groups, ([key, group]) => {
+        const total = groupedResults?.find(item => item.sessionId === key)?.total || count;
+        return `<section class="search-results-group">
+            <strong>${escapeHtml(group.title)} · ${total}</strong>
+            ${group.results.map(result => renderResultButton(result, result.globalIndex === currentIndex)).join('')}
+        </section>`;
+    }).join('');
+    const navigation = pages > 1 ? `<div class="button-row">
+        <button class="btn" type="button" data-search-page="${page - 1}" ${page === 0 ? 'disabled' : ''}>←</button>
+        <span>${page + 1} / ${pages}</span>
+        <button class="btn" type="button" data-search-page="${page + 1}" ${page + 1 === pages ? 'disabled' : ''}>→</button>
+    </div>` : '';
     resultsDisplay.innerHTML = `
         <div class="search-match-info">
-            <span>${i18n.t('tool.search.found')} <strong>${count}</strong></span>
-            <span>${i18n.t('tool.search.current')} <strong>${current}</strong> ${i18n.t('tool.search.of')} ${count}</span>
+            <span>${escapeHtml(i18n.t('tool.search.found'))} <strong>${count}</strong></span>
+            <span>${Math.max(0, currentIndex + 1)} / ${count}</span>
         </div>
-        <div style="font-size: 11px; margin-top: 5px; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-            ${i18n.t('tool.search.term')} "${searchTerm}"
-        </div>
+        <div>${escapeHtml(searchTerm)}</div>
+        ${message}
+        <div class="results-scroll-region">${lists}</div>
+        ${navigation}
     `;
     restoreResultsScroll();
 }
+
+cancelButton.addEventListener('click', () => sendAction('cancel-search'));
+searchMode.addEventListener('change', updateWholeWordLabel);
 
 // --- Event Listeners ---
 
@@ -207,6 +186,14 @@ replaceBtn.addEventListener('click', () => {
 });
 
 resultsDisplay.addEventListener('click', (event) => {
+    const pageButton = event.target.closest('[data-search-page]');
+    if (pageButton) {
+        resultsScrollTop = 0;
+        const region = getResultsScrollRegion();
+        if (region) region.scrollTop = 0;
+        sendAction('search-page', { page: Number(pageButton.dataset.searchPage) });
+        return;
+    }
     const target = event.target.closest('[data-global-index]');
     if (!target) {
         return;

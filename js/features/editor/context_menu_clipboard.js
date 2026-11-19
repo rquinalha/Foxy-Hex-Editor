@@ -24,10 +24,8 @@
         }
 
         let textToCopy = '';
-        let fallbackData = selection.data;
-        if (fallbackData instanceof Promise) {
-            fallbackData = await fallbackData;
-        }
+        const fallbackData = await hexEditor.readClipboardSelection(selection);
+        if (!fallbackData) return;
 
         if (format === 'ascii') {
             if (hexEditor.getSelectionDecodedText) {
@@ -121,10 +119,8 @@
         }
 
         let textToCopy = '';
-        let selData = selection.data;
-        if (selData instanceof Promise) {
-            selData = await selData;
-        }
+        const selData = await hexEditor.readClipboardSelection(selection);
+        if (!selData) return;
 
         if (format === 'ascii') {
             if (hexEditor.getSelectionDecodedText) {

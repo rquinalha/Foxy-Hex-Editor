@@ -60,7 +60,7 @@ class EnhancedLargeFileHandler {
             : file && file.size > 800 * 1024 * 1024);
     }
 
-    async loadLargeFile(file) {
+    async loadLargeFile(file, { preserveSearch = false } = {}) {
         if (!this.shouldUseLargeFileMode(file)) {
             throw new Error('File not suitable for large file mode');
         }
@@ -96,7 +96,7 @@ class EnhancedLargeFileHandler {
         this.hexEditor.selectionEnd = 0;
         this.hexEditor.currentScrollPercent = 0;
         this.hexEditor.clearHistory();
-        this.hexEditor.clearSearch();
+        if (!preserveSearch) this.hexEditor.clearSearch();
         this.hexEditor.bookmarks = [];
         this.hexEditor.modifiedBytes.clear();
         if (this.hexEditor.editingBytes && this.hexEditor.editingBytes.size > 0) {
@@ -104,6 +104,7 @@ class EnhancedLargeFileHandler {
         }
         this.hexEditor.hasUnsavedChanges = false;
         this.hexEditor.originalData = this.hexEditor.createDataSnapshot();
+        this.hexEditor.saveState("Arquivo carregado");
 
         this.hexEditor.totalLines = Math.ceil(file.size / this.hexEditor.bytesPerLine);
         this.hexEditor.maxScrollLines = Math.max(0, this.hexEditor.totalLines - this.hexEditor.visibleLines);
@@ -310,10 +311,10 @@ class EnhancedLargeFileHandler {
 
         try {
             const chunk = await loadPromise;
-            this.loadingPromises.delete(chunkIndex);
+            if (this.loadingPromises.get(chunkIndex) === loadPromise) this.loadingPromises.delete(chunkIndex);
             return chunk;
         } catch (error) {
-            this.loadingPromises.delete(chunkIndex);
+            if (this.loadingPromises.get(chunkIndex) === loadPromise) this.loadingPromises.delete(chunkIndex);
             console.error(`❌ Failed to load chunk ${chunkIndex}:`, error);
             return null;
         }
@@ -321,22 +322,25 @@ class EnhancedLargeFileHandler {
 
     async loadChunk(chunkIndex) {
         const start = chunkIndex * this.chunkSize;
-        const end = Math.min(start + this.chunkSize, this.fileSize);
+        const end = Math.min(start + this.chunkSize, this.sourceFileSize);
 
+        const source = this.file;
         const startTime = performance.now();
 
         try {
             let data;
 
-            if (window.electronFileHandler && window.electronFileHandler.isElectronEnvironment() && this.file && this.file.path) {
-                const read = await window.electronFileHandler.readFileChunkSafe(this.file.path, start, end - start);
+            if (window.electronFileHandler && window.electronFileHandler.isElectronEnvironment() && source?.path) {
+                const read = await window.electronFileHandler.readFileChunkSafe(source.path, start, end - start);
                 data = read;
             } else {
-                const blob = this.file.slice(start, end);
+                const blob = source.slice(start, end);
                 const arrayBuffer = await blob.arrayBuffer();
                 data = new Uint8Array(arrayBuffer);
             }
             
+            if (this.file !== source) return null;
+            if (data.length !== end - start) throw new Error('Leitura incompleta do arquivo.');
             const chunk = {
                 index: chunkIndex,
                 start: start,
@@ -412,6 +416,52 @@ class EnhancedLargeFileHandler {
     }
 
 
+    async findShiftJisRenderStart(offset, reader, isCurrent) {
+        if (offset === 0) return 0;
+        const width = reader.maxByteLength;
+        const blockSize = 64 * 1024;
+        let anchor = 0;
+
+        // A boundary is safe when no token can start before it and end after it.
+        for (let limit = offset; limit > 0 && !anchor;) {
+            const lookback = limit === offset ? 64 : blockSize;
+            const first = Math.max(1, limit - lookback + 1);
+            const start = Math.max(0, first - width + 1);
+            const end = Math.min(this.fileSize, limit + width - 1);
+            const bytes = await this.getBytes(start, end - start);
+            if (!isCurrent()) return null;
+            for (let boundary = limit - start; boundary >= first - start; boundary--) {
+                let crosses = false;
+                for (let probe = Math.max(0, boundary - width + 1); probe < boundary; probe++) {
+                    if (probe + reader.read(bytes, probe).length > boundary) {
+                        crosses = true;
+                        break;
+                    }
+                }
+                if (!crosses) {
+                    anchor = start + boundary;
+                    break;
+                }
+            }
+            limit = first - 1;
+        }
+
+        // Decode forward from that boundary without retaining the intervening file contents.
+        let position = anchor;
+        while (position < offset) {
+            const end = Math.min(offset, position + blockSize);
+            const bytes = await this.getBytes(position, Math.min(this.fileSize, end + width - 1) - position);
+            if (!isCurrent()) return null;
+            const start = position;
+            while (position < end) {
+                const next = position + reader.read(bytes, position - start).length;
+                if (next > offset) return position;
+                position = next;
+            }
+        }
+        return position;
+    }
+
     async renderLargeFileContent(percent = 0, preserveCursor = false) {
         if (!this.isLargeFileMode || !this.file) {
             return this.originalMethods.completeRenderWithColors?.call(this.hexEditor, percent, preserveCursor);
@@ -428,8 +478,48 @@ class EnhancedLargeFileHandler {
         this.setupContainerWithScrollbar(container);
 
         const contentArea = container.querySelector('#large-file-content');
-        if (contentArea) {
-            contentArea.innerHTML = '';
+        const source = this.file;
+        const startOffset = startLine * this.hexEditor.bytesPerLine;
+        const endOffset = Math.min((endLine + 1) * this.hexEditor.bytesPerLine, this.fileSize);
+        const table = this.hexEditor.getCurrentCharacterTable();
+        const is16bit = this.hexEditor.isCurrentTable16Bit();
+        const isShiftJIS = this.hexEditor.isCurrentTableShiftJIS();
+        const usesTableReader = !!table && (is16bit || isShiftJIS);
+        if (usesTableReader && this.textReaderTable !== table) {
+            this.textReaderTable = table;
+            this.textReader = createTableTextReader(table, is16bit);
+        }
+        const reader = usesTableReader ? this.textReader : null;
+        const revision = this.hexEditor.documentRevision;
+        const isCurrent = () => this.file === source && this.isLargeFileMode &&
+            table === this.hexEditor.getCurrentCharacterTable() && revision === this.hexEditor.documentRevision;
+        const contextStart = isShiftJIS && reader ? await this.findShiftJisRenderStart(startOffset, reader, isCurrent)
+            : (is16bit ? startOffset - startOffset % 2 : startOffset);
+        if (contextStart === null || !isCurrent()) return p;
+        const contextEnd = Math.min(this.fileSize, endOffset + (reader?.maxByteLength || 0));
+        const visibleBytes = await this.getBytes(contextStart, Math.max(0, contextEnd - contextStart));
+        if (!isCurrent()) return p;
+
+        const textRows = new Map();
+        const groups = new Map();
+        if (reader) {
+            for (let index = 0; contextStart + index < endOffset;) {
+                const position = contextStart + index;
+                const token = reader.read(visibleBytes, index);
+                if (position >= startOffset) {
+                    const row = Math.floor(position / this.hexEditor.bytesPerLine);
+                    if (!textRows.has(row)) textRows.set(row, []);
+                    textRows.get(row).push({ char: token.text, pos: position, length: token.length });
+                }
+                if (token.length > 1) {
+                    const end = position + token.length - 1;
+                    groups.set(position, { type: 'pair-start', start: position, end });
+                    for (let trail = position + 1; trail <= end; trail++) {
+                        groups.set(trail, { type: 'pair-end', start: position, end });
+                    }
+                }
+                index += token.length;
+            }
         }
         const fragment = document.createDocumentFragment();
         if (typeof this.hexEditor.resetTextColumnScrollMetrics === 'function') {
@@ -440,14 +530,14 @@ class EnhancedLargeFileHandler {
         const selStart = Math.min(this.hexEditor.selectionStart, this.hexEditor.selectionEnd);
         const selEnd = Math.max(this.hexEditor.selectionStart, this.hexEditor.selectionEnd);
 
-        const startOffset = startLine * this.hexEditor.bytesPerLine;
-        const endOffset = Math.min((endLine + 1) * this.hexEditor.bytesPerLine, this.fileSize);
-        await this.preloadRegion(startOffset, endOffset);
-
         for (let line = startLine; line <= endLine; line++) {
             const offset = line * this.hexEditor.bytesPerLine;
             if (offset < this.fileSize) {
-                const lineElement = await this.createEnhancedLine(offset, selStart, selEnd);
+                const relative = offset - contextStart;
+                const length = Math.min(this.hexEditor.bytesPerLine, endOffset - offset);
+                const lineData = visibleBytes.subarray(relative, relative + length);
+                const textEntries = reader ? (textRows.get(line) || []) : null;
+                const lineElement = this.createEnhancedLine(offset, selStart, selEnd, lineData, textEntries, groups);
                 if (lineElement) {
                     const textVisualUnits = parseInt(lineElement.dataset?.textVisualUnits || '0', 10) || 0;
                     maxTextVisualUnits = Math.max(maxTextVisualUnits, textVisualUnits);
@@ -460,7 +550,7 @@ class EnhancedLargeFileHandler {
         }
 
         if (contentArea) {
-            contentArea.appendChild(fragment);
+            contentArea.replaceChildren(fragment);
         } else {
             container.appendChild(fragment);
         }
@@ -545,6 +635,10 @@ class EnhancedLargeFileHandler {
         this.renderState.pendingPercent = p;
         this.renderState.preserveCursor = preserveCursor;
 
+        if (this.renderState.isRendering) {
+            this.renderState.needsAnotherPass = true;
+            return this.renderState.pendingPromise || Promise.resolve(p);
+        }
         if (this.renderState.frameId !== null) {
             return this.renderState.pendingPromise || Promise.resolve(p);
         }
@@ -573,16 +667,11 @@ class EnhancedLargeFileHandler {
 
         this.renderState.isRendering = true;
         try {
-            const result = await this.renderLargeFileContent(
-                this.renderState.pendingPercent,
-                this.renderState.preserveCursor
-            );
-
-            if (this.renderState.needsAnotherPass) {
+            let result;
+            do {
                 this.renderState.needsAnotherPass = false;
-                return await this.performScheduledRender();
-            }
-
+                result = await this.renderLargeFileContent(this.renderState.pendingPercent, this.renderState.preserveCursor);
+            } while (this.isLargeFileMode && this.renderState.needsAnotherPass);
             return result;
         } finally {
             this.renderState.isRendering = false;
@@ -591,9 +680,8 @@ class EnhancedLargeFileHandler {
     }
 
 
-    async createEnhancedLine(offset, selStart, selEnd) {
+    createEnhancedLine(offset, selStart, selEnd, lineData, textEntries, groups) {
         const bytesPerLine = this.hexEditor.bytesPerLine;
-        const lineData = await this.getBytes(offset, bytesPerLine);
 
         if (!lineData || lineData.length === 0) {
             return null;
@@ -647,15 +735,12 @@ class EnhancedLargeFileHandler {
             border-left: 2px solid rgba(129, 199, 132, 0.3); display: flex;
         `;
 
-        let asciiText = '';
+        const asciiEntries = textEntries || [];
         const currentTable = this.hexEditor.charTables && this.hexEditor.currentCharTable
             ? this.hexEditor.charTables[this.hexEditor.currentCharTable]
             : null;
-        const is16bit = currentTable && (currentTable.type === '16-bit' || currentTable.type === 'UTF-16');
-        const isShiftJIS = currentTable && (currentTable.type === 'shift-jis' || currentTable.type === 'shift_jis');
-        const active16BitDecoder = is16bit ? this.hexEditor.getActive16BitDecoder() : null;
-        const shiftJISVisualMap = isShiftJIS ? this.hexEditor.getShiftJISVisualMap(offset, bytesPerLine) : new Map();
-        const visual16BitMap = is16bit ? this.hexEditor.get16BitVisualMap(offset, bytesPerLine) : new Map();
+        const is16bit = this.hexEditor.isCurrentTable16Bit();
+        const isShiftJIS = this.hexEditor.isCurrentTableShiftJIS();
 
 
         const bookmarkedOffsets = lineBookmarks.length > 0
@@ -697,7 +782,7 @@ class EnhancedLargeFileHandler {
                 }
                 
                 hexSpan.style.color = byteColor;
-                const shiftJISInfo = shiftJISVisualMap.get(pos);
+                const shiftJISInfo = isShiftJIS ? groups.get(pos) : null;
                 if (shiftJISInfo) {
                     hexSpan.classList.add(shiftJISInfo.type === 'pair-start' ? 'shiftjis-pair-start' : 'shiftjis-pair-end');
                     hexSpan.style.width = '30px';
@@ -708,7 +793,7 @@ class EnhancedLargeFileHandler {
                     Object.assign(hexSpan.style, groupedStyle);
                 }
 
-                const visual16BitInfo = visual16BitMap.get(pos);
+                const visual16BitInfo = is16bit ? groups.get(pos) : null;
                 if (visual16BitInfo) {
                     hexSpan.classList.add(visual16BitInfo.type === 'pair-start' ? 'utf16-pair-start' : 'utf16-pair-end');
                     hexSpan.style.width = '30px';
@@ -819,7 +904,7 @@ class EnhancedLargeFileHandler {
 
                 bytesDiv.appendChild(hexSpan);
 
-                if (!is16bit) {
+                if (!textEntries) {
                     let char = '.';
                     const hexCode = byte.toString(16).toUpperCase().padStart(2, '0');
                     if (currentTable && currentTable.mapping) {
@@ -829,7 +914,7 @@ class EnhancedLargeFileHandler {
                     } else {
                         char = byte >= 32 && byte <= 126 ? String.fromCharCode(byte) : '.';
                     }
-                    asciiText += char;
+                    asciiEntries.push({ char, pos, length: 1 });
                 }
             } else {
                 if (insertCaretEnabled && !hexEndCaretPlaced && this.hexEditor.isInsertCaretActiveAt(pos, 'hex')) {
@@ -853,15 +938,10 @@ class EnhancedLargeFileHandler {
             }
         }
 
-        if (is16bit && active16BitDecoder) {
-            const maxChars = Math.min(bytesPerLine / 2, Math.floor(lineData.length / 2));
-            asciiText = active16BitDecoder.decode(lineData, 0, maxChars);
-        }
-
-        for (let i = 0; i < asciiText.length; i++) {
-            const char = asciiText[i];
-            const pos = offset + i;
-
+        let textVisualUnits = 0;
+        for (const { char, pos, length } of asciiEntries) {
+            const units = [...char].reduce((width, glyph) => width + (glyph.codePointAt(0) > 0xff ? 2 : 1), 0);
+            textVisualUnits += units;
             if (insertCaretEnabled) {
                 const activeCaret = this.hexEditor.createInsertCaretSpan(pos, 'ascii');
                 if (activeCaret) {
@@ -875,7 +955,7 @@ class EnhancedLargeFileHandler {
             asciiSpan.dataset.panel = 'ascii';
             asciiSpan.className = 'ascii-char';
             asciiSpan.style.cssText = `
-                width: ${Math.max(12, char.length * 8)}px; 
+                width: ${Math.max(12, units * 8)}px;
                 text-align: center; cursor: pointer;
                 padding: 0 1px; border-radius: 2px; user-select: none;
                 transition: all 0.1s ease;
@@ -904,8 +984,8 @@ class EnhancedLargeFileHandler {
             asciiSpan.style.color = charColor;
 
             if (this.hexEditor.activePanel === 'ascii') {
-                const isSelected = selStart !== selEnd && pos >= selStart && pos <= selEnd;
-                const isCursor = !insertCaretEnabled && pos === this.hexEditor.cursorPosition;
+                const isSelected = selStart !== selEnd && pos + length - 1 >= selStart && pos <= selEnd;
+                const isCursor = !insertCaretEnabled && pos <= this.hexEditor.cursorPosition && this.hexEditor.cursorPosition < pos + length;
 
                 if (isSelected) {
                     asciiSpan.style.background = 'linear-gradient(135deg, rgba(255, 107, 53, 0.6), rgba(247, 147, 30, 0.6))';
@@ -929,8 +1009,8 @@ class EnhancedLargeFileHandler {
 
             if (this.hexEditor.getHighlightAt) {
                 const h = this.hexEditor.getHighlightAt(pos);
-                const isSelected = selStart !== selEnd && pos >= selStart && pos <= selEnd;
-                const isCursor = !insertCaretEnabled && pos === this.hexEditor.cursorPosition;
+                const isSelected = selStart !== selEnd && pos + length - 1 >= selStart && pos <= selEnd;
+                const isCursor = !insertCaretEnabled && pos <= this.hexEditor.cursorPosition && this.hexEditor.cursorPosition < pos + length;
                 if (h) {
                     asciiSpan.dataset.highlightId = h.id;
                     if (this.hexEditor.getHighlightColors && this.hexEditor.applyHighlightStyle) {
@@ -987,16 +1067,16 @@ class EnhancedLargeFileHandler {
         }
 
         if (insertCaretEnabled) {
-            const lineEndAsciiOffset = Math.min(offset + asciiText.length, this.fileSize);
+            const lineEndAsciiOffset = offset + lineData.length;
             const activeCaret = this.hexEditor.createInsertCaretSpan(lineEndAsciiOffset, 'ascii');
             if (activeCaret) {
                 asciiDiv.appendChild(activeCaret);
             }
         }
 
-        asciiDiv.dataset.visualCharCount = String(asciiText.length);
-        asciiDiv.dataset.visualScrollUnits = String(asciiText.length);
-        line.dataset.textVisualUnits = String(asciiText.length);
+        asciiDiv.dataset.visualCharCount = String(asciiEntries.length);
+        asciiDiv.dataset.visualScrollUnits = String(textVisualUnits);
+        line.dataset.textVisualUnits = String(textVisualUnits);
 
         line.appendChild(offsetDiv);
         line.appendChild(bytesDiv);

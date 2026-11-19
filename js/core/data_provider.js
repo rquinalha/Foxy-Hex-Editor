@@ -74,7 +74,10 @@ class MemoryHexDataProvider extends BaseHexDataProvider {
         if (offset < 0 || offset >= this.data.length) {
             return false;
         }
-        this.data[offset] = value & 0xFF;
+        if (this.data[offset] !== (value & 0xFF)) {
+            if (this.sharedSnapshot === this.data) this.data = new Uint8Array(this.data);
+            this.data[offset] = value & 0xFF;
+        }
         return true;
     }
 
@@ -87,9 +90,9 @@ class MemoryHexDataProvider extends BaseHexDataProvider {
     insertByteSync(position, value = 0x00) {
         const safePos = Math.max(0, Math.min(Math.floor(Number(position)), this.data.length));
         const out = new Uint8Array(this.data.length + 1);
-        out.set(this.data.slice(0, safePos));
+        out.set(this.data.subarray(0, safePos));
         out[safePos] = value & 0xFF;
-        out.set(this.data.slice(safePos), safePos + 1);
+        out.set(this.data.subarray(safePos), safePos + 1);
         this.data = out;
         return true;
     }
@@ -102,9 +105,9 @@ class MemoryHexDataProvider extends BaseHexDataProvider {
         }
 
         const out = new Uint8Array(this.data.length + bytes.length);
-        out.set(this.data.slice(0, safePos), 0);
+        out.set(this.data.subarray(0, safePos), 0);
         out.set(bytes, safePos);
-        out.set(this.data.slice(safePos), safePos + bytes.length);
+        out.set(this.data.subarray(safePos), safePos + bytes.length);
         this.data = out;
         return true;
     }
@@ -114,8 +117,8 @@ class MemoryHexDataProvider extends BaseHexDataProvider {
             return false;
         }
         const out = new Uint8Array(this.data.length - 1);
-        out.set(this.data.slice(0, position));
-        out.set(this.data.slice(position + 1), position);
+        out.set(this.data.subarray(0, position));
+        out.set(this.data.subarray(position + 1), position);
         this.data = out;
         return true;
     }
@@ -124,14 +127,15 @@ class MemoryHexDataProvider extends BaseHexDataProvider {
         const safeStart = Math.max(0, Math.min(Math.floor(Number(start)), this.data.length));
         const safeEnd = Math.max(safeStart, Math.min(Math.floor(Number(end)), this.data.length));
         const out = new Uint8Array(this.data.length - (safeEnd - safeStart));
-        out.set(this.data.slice(0, safeStart));
-        out.set(this.data.slice(safeEnd), safeStart);
+        out.set(this.data.subarray(0, safeStart));
+        out.set(this.data.subarray(safeEnd), safeStart);
         this.data = out;
         return true;
     }
 
     snapshot() {
-        return new Uint8Array(this.data);
+        this.sharedSnapshot = this.data;
+        return this.data;
     }
 }
 

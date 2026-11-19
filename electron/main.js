@@ -3,46 +3,52 @@ const path = require('path');
 const fs = require('fs');
 const fsSync = fs;
 
-// Detectar se app esta empacotado e definir diretorio raiz correto
-const isPackaged = app.isPackaged;
+const APP_DIR = path.resolve(__dirname, '..');
 
-// Diretorio onde os arquivos de configuracao serao salvos (Portable Mode)
-let LOCAL_DATA_DIR;
-if (isPackaged) {
-    // Se for AppImage no Linux, process.env.APPIMAGE aponta para o arquivo original
-    const baseDir = process.env.APPIMAGE 
-        ? path.dirname(process.env.APPIMAGE) 
+function getDataDirectory() {
+    if (!app.isPackaged) return path.join(APP_DIR, '.foxy-data');
+    const launcherSwitch = '--foxy-portable-exe=';
+    const launcher = process.platform === 'win32'
+        ? process.argv.find(argument => argument.startsWith(launcherSwitch))?.slice(launcherSwitch.length)
+        : process.env.APPIMAGE;
+    const legacyPortableDir = process.platform === 'win32' ? process.env.PORTABLE_EXECUTABLE_DIR : null;
+    const baseDir = launcher && path.isAbsolute(launcher) ? path.dirname(launcher)
+        : legacyPortableDir && path.isAbsolute(legacyPortableDir) ? legacyPortableDir
         : path.dirname(app.getPath('exe'));
-    LOCAL_DATA_DIR = path.join(baseDir, '.foxy-data');
-} else {
-    LOCAL_DATA_DIR = path.join(path.resolve(__dirname, '..'), '.foxy-data');
+    return path.join(baseDir, '.foxy-data');
 }
 
-// Caminho para os icones (sempre dentro do asar ou pasta do projeto)
-const APP_DIR = path.resolve(__dirname, '..');
+const LOCAL_DATA_DIR = getDataDirectory();
 const APP_ICON_PATH = path.join(APP_DIR, 'assets', 'icon.ico');
 const APP_ICON_PNG = path.join(APP_DIR, 'assets', 'foxy.png');
-
-// Selecionar icone de acordo com o SO
 const WINDOW_ICON = process.platform === 'win32' ? APP_ICON_PATH : APP_ICON_PNG;
 
-// FORCAR todos os dados do Electron a ficarem dentro da pasta do app (portable)
-app.setPath('userData', LOCAL_DATA_DIR);
-app.setPath('appData', LOCAL_DATA_DIR);
-app.setPath('cache', path.join(LOCAL_DATA_DIR, 'cache'));
-app.setPath('temp', path.join(LOCAL_DATA_DIR, 'temp'));
-app.setPath('logs', path.join(LOCAL_DATA_DIR, 'logs'));
-
-// Criar pasta de dados apenas quando o app estiver pronto
-app.on('ready', () => {
-    try {
-        if (!fsSync.existsSync(LOCAL_DATA_DIR)) {
-            fsSync.mkdirSync(LOCAL_DATA_DIR, { recursive: true });
-        }
-    } catch (error) {
-        console.error('Erro ao criar pasta de dados:', error);
+try {
+    const paths = {
+        appData: LOCAL_DATA_DIR,
+        userData: LOCAL_DATA_DIR,
+        sessionData: LOCAL_DATA_DIR,
+        temp: path.join(LOCAL_DATA_DIR, 'temp'),
+        crashDumps: path.join(LOCAL_DATA_DIR, 'crash-dumps')
+    };
+    const logs = path.join(LOCAL_DATA_DIR, 'logs');
+    for (const directory of [...new Set(Object.values(paths)), logs]) {
+        fsSync.mkdirSync(directory, { recursive: true });
     }
-});
+    for (const [name, directory] of Object.entries(paths)) app.setPath(name, directory);
+    app.setAppLogsPath(logs);
+    if (process.platform === 'win32') {
+        process.env.TEMP = paths.temp;
+        process.env.TMP = paths.temp;
+        if (app.isPackaged) {
+            process.env.APPDATA = LOCAL_DATA_DIR;
+            process.env.LOCALAPPDATA = LOCAL_DATA_DIR;
+        }
+    }
+} catch (error) {
+    dialog.showErrorBox('Foxy Hex Editor', 'Nao foi possivel criar os dados do Foxy em:\\n' + LOCAL_DATA_DIR + '\\n\\n' + error.message);
+    app.exit(1);
+}
 
 const ROOT_DIR = APP_DIR; // Alias para compatibilidade com o resto do codigo
 
@@ -643,6 +649,7 @@ ipcMain.on('bookmark-cancelled', () => {
 let importWindow = null;
 
 ipcMain.on('open-import-window', (event, selectionData) => {
+    if (event.sender !== mainWindow?.webContents) return;
     if (importWindow && !importWindow.isDestroyed()) {
 
         importWindow.webContents.send('init-import-window', { selection: selectionData });
@@ -747,8 +754,8 @@ function openAboutWindow() {
 }
 
 ipcMain.on('about-window-ready', (event) => {
-    if (aboutWindow) {
-        aboutWindow.webContents.send('init-about', { lang: currentMenuLang });
+    if (event.sender === aboutWindow?.webContents) {
+        event.sender.send('init-about', { lang: currentMenuLang, version: app.getVersion() });
     }
 });
 
@@ -763,10 +770,10 @@ ipcMain.on('table-editor-apply', (event, payload) => {
 });
 
 
-ipcMain.on('import-selection-action', (event, data) => {
-    if (mainWindow) {
-        mainWindow.webContents.send('execute-import-selection', data);
-    }
+ipcMain.handle('import-selection-action', (event, data) => {
+    if (!mainWindow || event.sender !== importWindow?.webContents) return false;
+    mainWindow.webContents.send('execute-import-selection', data);
+    return true;
 });
 
 ipcMain.on('import-selection-cancelled', () => {
@@ -911,7 +918,7 @@ const menuTranslations = {
         view: 'Visualizar', reload: 'Recarregar', devTools: 'Ferramentas de Desenvolvedor', resetZoom: 'Zoom Normal', zoomIn: 'Aumentar Zoom', zoomOut: 'Diminuir Zoom', fullScreen: 'Tela Cheia',
         tools: 'Ferramentas', enableEdit: 'Habilitar Edição', insertMode: 'Inserir/Sobrescrever', findReplace: 'Buscar e Substituir', gotoOffset: 'Ir para Offset...', hexCalc: 'Calculadora Hex',
         highlights: 'Marcações', analyze: 'Analisar', bookmarks: 'Favoritos', relativeSearch: 'Busca Relativa', customizeColors: 'Customizar Cores',
-        help: 'Ajuda', about: 'Sobre Foxy Hex Editor', aboutTitle: 'Sobre Foxy Hex Editor', aboutMessage: 'Foxy Hex Editor v1.0.2', aboutDetail: 'Editor Hex avançado focado em games e traduções.',
+        help: 'Ajuda', about: 'Sobre Foxy Hex Editor',
         noRecentFiles: 'Nenhum arquivo recente'
     },
     en: {
@@ -920,7 +927,7 @@ const menuTranslations = {
         view: 'View', reload: 'Reload', devTools: 'Developer Tools', resetZoom: 'Reset Zoom', zoomIn: 'Zoom In', zoomOut: 'Zoom Out', fullScreen: 'Full Screen',
         tools: 'Tools', enableEdit: 'Enable Editing', insertMode: 'Insert/Overwrite', findReplace: 'Find and Replace', gotoOffset: 'Go to Offset...', hexCalc: 'Hex Calculator',
         highlights: 'Highlights', analyze: 'Analyze', bookmarks: 'Bookmarks', relativeSearch: 'Relative Search', customizeColors: 'Customize Colors',
-        help: 'Help', about: 'About Foxy Hex Editor', aboutTitle: 'About Foxy Hex Editor', aboutMessage: 'Foxy Hex Editor v1.0.2', aboutDetail: 'Advanced Hex Editor focused on games and translations.',
+        help: 'Help', about: 'About Foxy Hex Editor',
         noRecentFiles: 'No recent files'
     }
 };

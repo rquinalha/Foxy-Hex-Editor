@@ -37,7 +37,13 @@ class SimpleSaveProtection {
         }
 
         const beforeUnloadHandler = (e) => {
-            if (this.hexEditor.hasUnsavedChanges && !this.isExiting) {
+            if (window.intelligentSave?.saveInProgress) {
+                e.preventDefault();
+                return false;
+            }
+            const dirtyTab = window.fileTabManager?.sessions.some(session =>
+                session.id !== window.fileTabManager.activeSessionId && session.hasUnsavedChanges);
+            if ((this.hexEditor.hasUnsavedChanges || dirtyTab) && !this.isExiting) {
                 e.preventDefault();
                 // Em vez de bloquear, mostrar modal customizado
                 if (window.notificationSystem && typeof window.notificationSystem.confirm === 'function') {

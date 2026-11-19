@@ -2,7 +2,6 @@
 
 let selectionData = null;
 let selectedFile = null;
-let fileArrayBuffer = null;
 
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
@@ -94,6 +93,7 @@ function applyTranslations() {
 
 ipcRenderer.on('init-import-window', (event, data) => {
     selectionData = data.selection;
+    updateImportLimit();
     applyTranslations();
     document.getElementById('sel-size').textContent = `${selectionData.length} bytes`;
     document.getElementById('sel-start').textContent = '0x' + selectionData.start.toString(16).toUpperCase().padStart(8, '0');
@@ -122,44 +122,56 @@ fileInput.addEventListener('change', (e) => {
 
 function handleFileSelected(file) {
     selectedFile = file;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        fileArrayBuffer = e.target.result;
-        const fileSize = fileArrayBuffer.byteLength;
-        const selLength = selectionData ? selectionData.length : 0;
-        const excess = Math.max(0, fileSize - selLength);
-
-        fileDetails.innerHTML = `
-            <div><strong>${t('fileName')}</strong> ${file.name}</div>
-            <div><strong>${t('fileSize')}</strong> ${fileSize} bytes</div>
-            <div><strong>${t('fileSizeSel')}</strong> ${selLength} bytes</div>
-        `;
-        fileInfo.style.display = 'block';
-
-        if (fileSize > selLength) {
-            warningMsg.innerHTML = t('warnLarger', fileSize, selLength, excess);
-            importWarning.style.display = 'block';
-        } else {
-            importWarning.style.display = 'none';
-        }
-
-        importBtn.disabled = false;
-        importBtn.classList.add('enabled');
-    };
-    reader.readAsArrayBuffer(file);
+    fileDetails.textContent = '';
+    for (const text of [
+        t('fileName') + ' ' + file.name,
+        t('fileSize') + ' ' + file.size + ' bytes',
+        t('fileSizeSel') + ' ' + (selectionData?.length || 0) + ' bytes'
+    ]) {
+        const row = document.createElement('div');
+        row.textContent = text;
+        fileDetails.appendChild(row);
+    }
+    fileInfo.style.display = 'block';
+    updateImportLimit();
 }
 
-importBtn.addEventListener('click', () => {
-    if (!fileArrayBuffer || !selectionData) return;
+function updateImportLimit() {
+    if (!selectedFile || !selectionData) return;
+    const count = insertMode.checked ? selectedFile.size : Math.min(selectedFile.size, selectionData.length);
+    importBtn.disabled = count === 0 || count > selectionData.maxImportBytes;
+    importBtn.classList.toggle('enabled', !importBtn.disabled);
+    const excess = Math.max(0, selectedFile.size - selectionData.length);
+    if (count > selectionData.maxImportBytes || !count) {
+        warningMsg.textContent = !count ? 'O arquivo de importação está vazio.' : 'O trecho importado pode ter até 1 MiB por operação.';
+        importWarning.style.display = 'block';
+    } else {
+        if (excess) warningMsg.innerHTML = t('warnLarger', selectedFile.size, selectionData.length, excess);
+        importWarning.style.display = excess ? 'block' : 'none';
+    }
+}
 
-    const importData = Array.from(new Uint8Array(fileArrayBuffer));
-    ipcRenderer.send('import-selection-action', {
-        selection: selectionData,
-        data: importData,
-        insertionMode: insertMode.checked
-    });
+insertMode.addEventListener('change', updateImportLimit);
 
-    window.close();
+importBtn.addEventListener('click', async () => {
+    if (!selectedFile || !selectionData || importBtn.disabled) return;
+    const file = selectedFile;
+    const selection = selectionData;
+    const insertionMode = insertMode.checked;
+    const length = insertionMode ? file.size : Math.min(file.size, selection.length);
+    if (!length || length > selection.maxImportBytes) return;
+    importBtn.disabled = true;
+    try {
+        const data = new Uint8Array(await file.slice(0, length).arrayBuffer());
+        if (file !== selectedFile || selection !== selectionData) return;
+        const received = await ipcRenderer.invoke('import-selection-action', { selection, data, insertionMode });
+        if (!received) throw new Error('A janela do editor não está disponível.');
+        window.close();
+    } catch (error) {
+        warningMsg.textContent = error.message;
+        importWarning.style.display = 'block';
+        importBtn.disabled = false;
+    }
 });
 
 cancelBtn.addEventListener('click', () => {

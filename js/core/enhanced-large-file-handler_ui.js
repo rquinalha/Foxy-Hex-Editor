@@ -1,27 +1,3 @@
-EnhancedLargeFileHandler.prototype.preloadRegion = async function(startOffset, endOffset) {
-        const startChunk = Math.floor(startOffset / this.chunkSize);
-        const endChunk = Math.floor(endOffset / this.chunkSize);
-
-        const loadPromises = [];
-        for (let chunkIndex = startChunk; chunkIndex <= endChunk; chunkIndex++) {
-            if (chunkIndex >= 0 && chunkIndex < this.totalChunks) {
-                if (!this.chunkCache.has(chunkIndex) && !this.loadingPromises.has(chunkIndex)) {
-                    loadPromises.push(this.getChunk(chunkIndex));
-                }
-            }
-        }
-
-        if (loadPromises.length > 0) {
-            try {
-                await Promise.all(loadPromises);
-            } catch (error) {
-                console.error('❌ Preload region failed:', error);
-            }
-        }
-
-
-};
-
 EnhancedLargeFileHandler.prototype.autoScrollLargeFile = function(position) {
         if (!this.isLargeFileMode) {
             return this.hexEditor.autoScrollToCursor?.(position);

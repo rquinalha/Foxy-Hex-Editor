@@ -6,46 +6,15 @@
             this.showNotification('âŒ ' + t('editorNotFound'), 'error');
             return;
         }
+        if (window.intelligentSave?.saveInProgress) {
+            this.showNotification('Aguarde o salvamento antes de exportar a seleção.', 'warning');
+            return;
+        }
 
         const selection = hexEditor.getSelection();
         if (selection.length === 0) {
             this.showNotification('âš ï¸ ' + t('noSelectionToExport'), 'warning');
             return;
-        }
-
-        if (selection.length > 500 * 1024 * 1024) {
-            try {
-                if (window.showSaveFilePicker) {
-                    const handle = await window.showSaveFilePicker({
-                        suggestedName: `selection_${selection.length}bytes.bin`,
-                        types: [{ description: 'Binary File', accept: { 'application/octet-stream': ['.bin', '.dat'] } }]
-                    });
-                    const writable = await handle.createWritable();
-
-                    this.showNotification('â³ ' + t('exportingStream').replace('{0}', selection.length), 'warning');
-                    const CHUNK_SIZE = 16 * 1024 * 1024;
-                    let remaining = selection.length;
-                    let currentStart = selection.start;
-
-                    while (remaining > 0) {
-                        const len = Math.min(remaining, CHUNK_SIZE);
-                        const chunkBytes = await hexEditor.getSelectionBytesAsync(currentStart, currentStart + len - 1);
-                        await writable.write(chunkBytes);
-                        remaining -= len;
-                        currentStart += len;
-                    }
-
-                    await writable.close();
-                    return;
-                }
-
-                this.showNotification('âŒ ' + t('selectionTooLarge'), 'error');
-                return;
-            } catch (err) {
-                console.error(err);
-                this.showNotification('âŒ ' + t('exportCancelled'), 'error');
-                return;
-            }
         }
 
         let start = selection.start;
@@ -77,15 +46,29 @@
             }
         }
 
-        const bytes = await hexEditor.getSelectionBytesAsync(start, end);
+        const fileService = window.electronFileHandler;
+        const source = hexEditor.getVirtualNavigationHandler?.()?.file?.path;
+        const snapshot = hexEditor.createDataSnapshot();
+        const size = end - start + 1;
+        try {
+            const target = await fileService.showSaveDialog('selection_' + size + 'bytes.bin');
+            if (target.canceled) return;
+            const targetPath = target.filePath;
+            const tabs = window.fileTabManager;
+            const fs = require('node:fs').promises;
+            const normalized = await fs.realpath(targetPath).catch(error => {
+                if (error.code !== 'ENOENT') throw error;
+                return targetPath;
+            });
+            if (tabs?.findSessionByFile({ path: normalized })) {
+                throw new Error('Escolha um destino que não esteja aberto no editor.');
+            }
+            await fileService.exportDocumentRange(targetPath, source, snapshot, start, size);
+            this.showNotification('Seleção exportada.', 'success');
+        } catch (error) {
+            this.showNotification(error.message, 'error');
+        }
 
-        const blob = new Blob([bytes], { type: 'application/octet-stream' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `selection_${bytes.length}bytes.bin`;
-        a.click();
-        URL.revokeObjectURL(url);
     },
 
     importSelection() {
@@ -105,9 +88,10 @@
         if (typeof require !== 'undefined' && typeof process !== 'undefined') {
             const { ipcRenderer } = require('electron');
             ipcRenderer.send('open-import-window', {
-                start: selection.start,
-                end: selection.end,
-                length: selection.length
+                ...selection,
+                sessionId: window.fileTabManager?.activeSessionId,
+                revision: hexEditor.documentRevision || 0,
+                maxImportBytes: 1024 * 1024
             });
         } else {
             this.showImportModal(selection);

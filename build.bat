@@ -105,28 +105,26 @@ exit /b 0
 
 :install_deps
 if /i "!LANG!"=="PT" (
-    echo !BLUE! Verificando modulos compartilhados...
+    echo !BLUE! Verificando dependencias...
 ) else (
-    echo !BLUE! Checking shared modules...
+    echo !BLUE! Checking dependencies...
 )
 
 if not exist "node_modules\electron\package.json" (
     if /i "!LANG!"=="PT" (
         echo !RED! Modulos Electron nao encontrados.
-        echo !BLUE! Rode: D:\Claude\_electron_shared\Instalar-Modulos.bat
-        echo !BLUE! Depois: D:\Claude\_electron_shared\Ligar-Apps.bat
+        echo !BLUE! Execute npm ci na pasta do projeto.
     ) else (
         echo !RED! Electron modules not found.
-        echo !BLUE! Run: D:\Claude\_electron_shared\Instalar-Modulos.bat
-        echo !BLUE! Then: D:\Claude\_electron_shared\Ligar-Apps.bat
+        echo !BLUE! Run npm ci in the project directory.
     )
     exit /b 1
 )
 
 if /i "!LANG!"=="PT" (
-    echo !GREEN! Modulos compartilhados OK.
+    echo !GREEN! Dependencias OK.
 ) else (
-    echo !GREEN! Shared modules OK.
+    echo !GREEN! Dependencies OK.
 )
 exit /b 0
 
@@ -156,7 +154,7 @@ if /i "!LANG!"=="PT" (
     echo !BLUE! Starting build for Windows Portable ^(x64^)...
 )
 
-call npx electron-builder --win portable --x64 --publish=never
+call "%~dp0build-portable.bat"
 if errorlevel 1 (
     if /i "!LANG!"=="PT" (
         echo !RED! Build portavel falhou.
@@ -224,7 +222,8 @@ if /i "!LANG!"=="PT" (
     echo !BLUE! Starting multiplatform build ^(Windows Portable + Linux AppImage^)...
 )
 
-call npx electron-builder --win portable --linux AppImage --x64 --publish=never
+call "%~dp0build-portable.bat"
+if not errorlevel 1 call npx electron-builder --linux AppImage --x64 --publish=never
 if errorlevel 1 (
     if /i "!LANG!"=="PT" (
         echo !YELLOW! Alguns builds podem ter falhado ^(verifique os logs acima^).

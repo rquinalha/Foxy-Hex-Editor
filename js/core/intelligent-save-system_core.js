@@ -8,43 +8,6 @@ class IntelligentSaveSystem {
     }
 
 
-    async saveLargeFileOverlayPatches() {
-        if (!window.electronFileHandler || !window.electronFileHandler.isElectronEnvironment()) {
-            throw new Error('Electron não disponí­vel para aplicar patches');
-        }
-        const currentFilePath = this.getResolvedCurrentFilePath();
-        if (!currentFilePath) {
-            throw new Error('Caminho do arquivo não definido');
-        }
-
-        const handler = this.getLargeFileHandler();
-        if (!this.hexEditor.isVirtualModeReady?.() || !this.hexEditor.hasVirtualOverlayChanges?.()) {
-            return true;
-        }
-
-        const entries = this.hexEditor.getVirtualOverlayEntries?.() || [];
-        if (entries.length === 0) return true;
-
-        await window.electronFileHandler.applyOverlayEntries(currentFilePath, entries);
-
-        this.hexEditor.commitVirtualOverlayToCache?.(entries);
-        this.hexEditor.clearVirtualOverlay?.();
-        return true;
-    }
-
-    async reloadLargeFileAfterStructuralSave(filePath, fileName) {
-        const handler = this.getLargeFileHandler();
-        if (!this.hexEditor.isVirtualModeReady?.()) {
-            return;
-        }
-
-        await this.hexEditor.loadFile({
-            name: fileName,
-            size: this.hexEditor.getVirtualDataLength?.() || 0,
-            path: filePath
-        });
-    }
-
     setCurrentFile(filePath, fileName) {
         if (filePath === '' || filePath === 'null') {
             this.currentFilePath = null;
@@ -88,201 +51,131 @@ class IntelligentSaveSystem {
         return this.hexEditor.getDataLength?.() || this.hexEditor.fileSize || 0;
     }
 
-    getResolvedCurrentFilePath() {
-        return this.hexEditor.getResolvedCurrentFilePath?.() || this.currentFilePath || null;
-    }
-
-    getLargeFileHandler() {
-        return this.hexEditor.getVirtualNavigationHandler?.() || null;
-    }
-
-    resolveCurrentLargeFileSourcePath(handler) {
-        return this.getResolvedCurrentFilePath()
-            || this.hexEditor.currentFilePath
-            || (handler && handler.file && handler.file.path)
-            || (window.electronFileHandler.currentFile && window.electronFileHandler.currentFile.path)
-            || null;
-    }
-
-    async saveSmallFileData(targetPath, data, useProgressBar) {
-        await window.electronFileHandler.saveFileElectron(targetPath, data, !!useProgressBar);
-    }
-
-    async saveCurrentLargeFile(handler, targetPath) {
-        if (this.hexEditor.hasVirtualStructuralChanges?.()) {
-            await window.electronFileHandler.saveLargeFileWithStructureChanges(targetPath, handler);
-            await this.reloadLargeFileAfterStructuralSave(targetPath, this.hexEditor.currentFileName);
-            return;
-        }
-
-        if (this.hexEditor.hasVirtualOverlayChanges?.()) {
-            await this.saveLargeFileOverlayPatches();
-            return;
-        }
-
-        return true;
-    }
-
-    async saveLargeFileAsToPath(handler, targetPath, useProgressBar) {
-        const sourcePath = this.resolveCurrentLargeFileSourcePath(handler);
-        if (!sourcePath) {
-            const fallbackData = this.hexEditor.getData();
-            if (fallbackData && fallbackData.length > 0) {
-                await this.saveSmallFileData(targetPath, fallbackData, true);
-                return;
-            }
-
-            throw new Error('Arquivo fonte não encontrado e dados não disponí­veis');
-        }
-
-        const overlayEntries = this.hexEditor.hasVirtualOverlayChanges?.()
-            ? (this.hexEditor.getVirtualOverlayEntries?.() || [])
-            : [];
-
-        if (this.hexEditor.hasVirtualStructuralChanges?.()) {
-            await window.electronFileHandler.saveLargeFileAsTransformed(sourcePath, targetPath, handler, useProgressBar);
-            return;
-        }
-
-        if (overlayEntries.length > 0) {
-            await window.electronFileHandler.saveLargeFileAsWithOverlay(sourcePath, targetPath, overlayEntries, useProgressBar);
-            return;
-        }
-
-        await window.electronFileHandler.copyFile(sourcePath, targetPath, useProgressBar);
-    }
-
     async save() {
-        if (this.saveInProgress) {
-            return false;
-        }
-
-        if (!this.hexEditor.hasUnsavedChanges) {
-            this.showNotification('Nenhuma alteração para salvar', 'info');
-            return true;
-        }
-
-        if (!this.canSaveDirectly()) {
-            return this.saveAs();
-        }
-
-        this.saveInProgress = true;
-
-        try {
-            if (!window.electronFileHandler || !window.electronFileHandler.isElectronEnvironment()) {
-                throw new Error('Electron não disponível');
-            }
-
-            const handler = this.getLargeFileHandler();
-            const currentDataSize = this.getCurrentDataSize();
-            const useProgressBar = this.shouldUseProgressBar(currentDataSize);
-            const currentFilePath = this.getResolvedCurrentFilePath();
-
-            if (handler) {
-                await this.saveCurrentLargeFile(handler, currentFilePath);
-            } else {
-                const fileData = this.hexEditor.getData();
-                await this.saveSmallFileData(currentFilePath, fileData, useProgressBar);
-            }
-
-            this.hexEditor.markSavedState();
-            this.lastSaveTimestamp = Date.now();
-
-            this.saveInProgress = false;
-            return true;
-        } catch (error) {
-            this.showNotification(`Erro ao salvar: ${error.message}. Tentando Save As...`, 'warning');
-            this.saveInProgress = false;
-            return this.saveAs();
-        }
+        if (!this.hexEditor.hasUnsavedChanges) return true;
+        return this.saveToDisk(!this.canSaveDirectly());
     }
 
     async saveAs() {
+        return this.saveToDisk(true);
+    }
+
+    isSessionSaving(sessionId) {
+        return this.saveInProgress && this.savingSessionId === sessionId;
+    }
+
+    async saveToDisk(chooseDestination) {
+        const tabs = window.fileTabManager;
+        const editor = this.hexEditor;
+        if (this.saveInProgress || tabs?.isSwitchingSession) return false;
+        const session = tabs?.getSessionById(tabs.activeSessionId);
+        if (!session && !editor.currentFileName) return false;
+
+        this.saveInProgress = true;
+        this.savingSessionId = tabs?.activeSessionId;
+        this.updateSaveButton();
+        const fileService = window.electronFileHandler;
         try {
-            if (!window.electronFileHandler || !window.electronFileHandler.isElectronEnvironment()) {
-                if (this.hexEditor.save) {
-                    return this.hexEditor.save();
-                }
-                this.showNotification('Sistema de salvamento não disponível', 'error');
-                return false;
+            if (!fileService?.isElectronEnvironment()) throw new Error('Electron indisponível.');
+            const fs = require('node:fs').promises;
+            const path = require('node:path');
+            const sourcePath = editor.getResolvedCurrentFilePath();
+            const sourceName = editor.currentFileName;
+            const sourceVersion = editor.currentDiskVersion;
+            const snapshot = editor.createDataSnapshot();
+            const handler = editor.getVirtualNavigationHandler?.();
+            const virtual = handler && { sourcePath: handler.file.path, snapshot, structural: handler.hasStructuralChanges() };
+            let targetPath = sourcePath;
+            if (chooseDestination) {
+                const result = await fileService.showSaveDialog(sourcePath || sourceName || 'arquivo.bin');
+                if (!result || result.canceled) return false;
+                const parent = await fs.realpath(path.dirname(result.filePath));
+                targetPath = await fs.realpath(result.filePath).catch(error => {
+                    if (error.code !== 'ENOENT') throw error;
+                    return path.join(parent, path.basename(result.filePath));
+                });
             }
 
-            const result = await window.electronFileHandler.showSaveDialog(this.hexEditor.currentFileName || 'arquivo_editado.bin');
-            if (result.canceled) {
-                return false;
+            // Finish any open or tab switch that began while the dialog was open.
+            while (tabs?.isSwitchingSession) await tabs.sessionSwitchPromise;
+            const targetSession = tabs?.findSessionByFile({ path: targetPath });
+            if (targetSession && targetSession !== session) {
+                throw new Error('O destino já está aberto em outra aba.');
             }
+            this.savingTargetKey = tabs?.getSessionFileKey({ path: targetPath });
+            const sameFile = !!sourcePath && (tabs
+                ? tabs.getSessionFileKey({ path: sourcePath }) === this.savingTargetKey
+                : sourcePath === targetPath);
+            const fileName = chooseDestination ? path.basename(targetPath) : sourceName;
+            if (virtual) await fileService.writeVirtualDocument(virtual, targetPath, sameFile);
+            else await fileService.writeAtomicDocument(targetPath, handle => handle.writeFile(snapshot), sameFile ? sourceVersion : null);
+            const savedVersion = documentDiskVersion(await fs.stat(targetPath));
 
-            const currentDataSize = this.getCurrentDataSize();
-            const useProgressBar = this.shouldUseProgressBar(currentDataSize);
-            const newFileName = result.filePath.split(/[\\/]/).pop();
-            const handler = this.getLargeFileHandler();
-
-            if (handler) {
-                await this.saveLargeFileAsToPath(handler, result.filePath, useProgressBar);
-            } else if (useProgressBar) {
-                const data = this.hexEditor.getData();
-                await this.saveSmallFileData(result.filePath, data, true);
+            while (tabs?.isSwitchingSession) await tabs.sessionSwitchPromise;
+            if (session && tabs.activeSessionId !== session.id) {
+                this.finishInactiveSave(tabs, session, snapshot, targetPath, fileName, savedVersion);
             } else {
-                const data = this.hexEditor.getData();
-                await this.saveSmallFileData(result.filePath, data, false);
-            }
-
-            if (handler) {
-                await this.reloadLargeFileAfterStructuralSave(result.filePath, newFileName);
-            } else {
-                this.setCurrentFile(result.filePath, newFileName);
-                this.hexEditor.markSavedState();
-            }
-
-            if (window.electronFileHandler) {
-                window.electronFileHandler.currentFile = {
-                    name: newFileName,
-                    size: this.hexEditor.getDataLength ? this.hexEditor.getDataLength() : 0,
-                    path: result.filePath
-                };
-            }
-
-            this.setCurrentFile(result.filePath, newFileName);
-            this.hexEditor.clearHistory();
-            this.hexEditor.updateHistoryUI();
-            this.hexEditor.updateButtons();
-
-            if (window.SimpleSaveProtection && window.SimpleSaveProtection.refreshTitle) {
-                window.SimpleSaveProtection.refreshTitle();
-            }
-
-            const fileDisplay = document.getElementById('current-file');
-            if (fileDisplay) {
-                fileDisplay.textContent = newFileName;
-            }
-
-            if (window.fileTabManager && window.fileTabManager.activeSessionId) {
-                const activeSession = window.fileTabManager.getSessionById(window.fileTabManager.activeSessionId);
-                if (activeSession) {
-                    window.fileTabManager.captureEditorStateInto(activeSession);
-                    window.fileTabManager.updateSessionVisualMetaFromEditor(activeSession);
-                    window.fileTabManager.renderTabs();
+                editor.currentDiskVersion = savedVersion;
+                if (virtual) {
+                    editor.getVirtualNavigationHandler().rebaseToCurrentState(targetPath, fileName, savedVersion);
+                    // Old virtual history refers to offsets in the previous file on disk.
+                    editor.clearHistory();
+                    editor.saveState('Arquivo salvo');
                 }
+                this.setCurrentFile(targetPath, fileName);
+                editor.currentFileExtension = editor.getFileExtension(fileName);
+                editor.markSavedState();
+                fileService.currentFile = { name: fileName, path: targetPath, size: editor.getDataLength() };
+                const fileDisplay = document.getElementById('current-file');
+                if (fileDisplay) fileDisplay.textContent = fileName;
+                if (session) tabs.captureEditorStateInto(session);
             }
 
-            this.showNotification(`Arquivo salvo como: ${newFileName}`, 'success');
+            tabs?.renderTabs();
+            window.SimpleSaveProtection?.refreshTitle?.();
+            window.ipcRenderer?.send('add-recent-file', targetPath);
+            this.lastSaveTimestamp = Date.now();
+            if (chooseDestination) this.showNotification(`Arquivo salvo como: ${fileName}`, 'success');
             return true;
         } catch (error) {
-            console.error('[SAVE] Erro no Save As:', error);
-            this.showNotification(`Erro ao salvar como: ${error.message}`, 'error');
+            this.showNotification(`Erro ao salvar: ${error.message}`, 'error');
             return false;
+        } finally {
+            this.saveInProgress = false;
+            this.savingSessionId = undefined;
+            this.savingTargetKey = undefined;
+            this.updateSaveButton();
         }
+    }
+
+    finishInactiveSave(tabs, session, snapshot, targetPath, fileName, savedVersion) {
+        const size = snapshot.isVirtual ? snapshot.fileSize : snapshot.length;
+        const fileRef = { name: fileName, path: targetPath, size, forceVirtual: !!snapshot.isVirtual, diskVersion: savedVersion };
+        if (snapshot.isVirtual) {
+            snapshot = {
+                isVirtual: true, fileSize: size, sourceFileSize: size, diskVersion: savedVersion,
+                modifiedOverlay: new Map(), virtualSegments: [{ type: 'source', start: 0, length: size }]
+            };
+            session.history = [{
+                isLightweight: true, snapshot, description: 'Arquivo salvo', timestamp: new Date(),
+                cursorPosition: session.cursorPosition, modifiedBytes: new Set()
+            }];
+            session.historyIndex = 0;
+        }
+        Object.assign(session, {
+            fileRef, fileKey: tabs.getSessionFileKey(fileRef), filePath: targetPath, fileName,
+            currentFileName: fileName, currentFileExtension: this.hexEditor.getFileExtension(fileName),
+            fileSize: size, diskVersion: savedVersion, snapshot, originalData: snapshot, hasUnsavedChanges: false, modifiedBytes: []
+        });
     }
 
     updateSaveButton() {
         const saveBtn = document.getElementById('save-btn');
         const saveAsBtn = document.getElementById('save-as-btn');
 
-        if (!saveBtn || !saveAsBtn) {
-            return;
-        }
+        if (!saveBtn) return;
 
-        if (this.hexEditor.hasUnsavedChanges === true) {
+        if (this.hexEditor.hasUnsavedChanges === true && !this.saveInProgress) {
             saveBtn.disabled = false;
             saveBtn.classList.add('has-changes');
 
@@ -297,14 +190,8 @@ class IntelligentSaveSystem {
             saveBtn.title = 'Nenhuma alteracao para salvar';
         }
 
-        if (this.hexEditor.hasUnsavedChanges === true) {
-            saveAsBtn.disabled = false;
-            saveAsBtn.classList.add('has-changes');
-            saveAsBtn.title = 'Salvar arquivo com novo nome';
-        } else {
-            saveAsBtn.disabled = true;
-            saveAsBtn.classList.remove('has-changes');
-            saveAsBtn.title = 'Nenhuma alteracao para salvar';
+        if (saveAsBtn) {
+            saveAsBtn.disabled = this.saveInProgress || !this.hexEditor.currentFileName;
         }
     }
 

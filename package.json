@@ -1,14 +1,15 @@
 {
     "name": "foxy-hex-editor",
-    "version": "1.0.2",
+    "version": "1.1.0",
     "description": "Foxy Hex Editor - Editor Hex Avançado e Ferramentas de Tradução",
     "main": "electron/main.js",
     "scripts": {
         "start": "electron .",
         "test:search": "node tools/tests/search-regression.js",
+        "test:editor": "node tools/tests/editor-integration.js",
         "build": "electron-builder",
         "dist": "electron-builder --publish=never",
-        "portable": "electron-builder --win portable --publish=never",
+        "portable": "node scripts/build-portable.cjs",
         "appimage": "electron-builder --linux AppImage --publish=never"
     },
     "author": "Foxy Editor",
@@ -17,8 +18,8 @@
         "iconv-lite": "^0.6.3"
     },
     "devDependencies": {
-        "electron": "^43.2.0",
-        "electron-builder": "^25.1.8"
+        "electron": "43.2.0",
+        "electron-builder": "25.1.8"
     },
     "build": {
         "appId": "com.foxyeditor.hex",
@@ -26,6 +27,16 @@
         "directories": {
             "output": "dist"
         },
+        "files": [
+            "index.html",
+            "LICENSE",
+            "assets/**",
+            "css/**",
+            "electron/**",
+            "js/**",
+            "tools/**",
+            "!tools/tests/**"
+        ],
         "win": {
             "target": [
                 {
@@ -39,6 +50,7 @@
             "publisherName": "Foxy Hex Editor"
         },
         "linux": {
+            "artifactName": "FoxyHexEditor-${version}-linux-${arch}.${ext}",
             "target": [
                 {
                     "target": "AppImage",

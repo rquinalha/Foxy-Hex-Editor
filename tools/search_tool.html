@@ -199,8 +199,13 @@
                 <span data-i18n="tool.search.case_sensitive">Diferenciar MaiÃºsculas</span>
             </label>
             <label class="checkbox-group">
-                <input type="checkbox" id="regex-mode">
-                <span data-i18n="tool.search.regex">Regex</span>
+                <span data-i18n="tool.search.mode">Modo</span>
+                <select id="search-mode">
+                    <option value="auto" data-i18n="tool.search.mode_auto">Automático</option>
+                    <option value="text" data-i18n="tool.search.mode_text">Texto</option>
+                    <option value="hex">Hex</option>
+                    <option value="regex">Regex</option>
+                </select>
             </label>
             <label class="checkbox-group">
                 <input type="checkbox" id="whole-word">
@@ -224,6 +229,9 @@
             <div class="button-row">
                 <button class="btn primary" id="find-btn" title="Enter">
                     <span data-i18n="tool.search.search_btn">Buscar</span>
+                </button>
+                <button class="btn" id="cancel-search-btn" type="button" hidden>
+                    <span data-i18n="tool.search.cancel">Cancelar busca</span>
                 </button>
                 <button class="btn success" id="replace-btn">
                     <span data-i18n="tool.search.replace_btn">Substituir</span>

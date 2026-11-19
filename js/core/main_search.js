@@ -4,6 +4,7 @@ Object.assign(FoxyHexEditorComplete.prototype, {
     },
 
     async performSearch(params = null) {
+        params ??= this.lastDocumentSearchOptions || null;
         const findInput = document.getElementById('find-input');
         let searchTerm = typeof params?.findValue === 'string'
             ? params.findValue.trim()
@@ -19,44 +20,16 @@ Object.assign(FoxyHexEditorComplete.prototype, {
         const regexMode = params?.regexMode ?? (document.getElementById('regex-mode')?.checked || false);
         const searchAllTabs = params?.searchAllTabs ?? (document.getElementById('search-all-tabs')?.checked || false);
 
+        if (this.performDocumentSearch && window.fileTabManager) {
+            return this.performDocumentSearch(searchTerm, { ...params, caseSensitive, wholeWord, regexMode, searchAllTabs });
+        }
+
         this.lastSearchTerm = searchTerm;
         this.searchResults = [];
         this.currentSearchIndex = -1;
         this.globalTabSearchActive = false;
         this.globalTabSearchGroups = [];
         this.globalTabSearchSkippedLargeCount = 0;
-
-        if (searchAllTabs) {
-            const hexPattern = /^[0-9A-Fa-f\s]+$/;
-            const looksHex = (hexPattern.test(searchTerm) && searchTerm.includes(' ')) ||
-                (hexPattern.test(searchTerm) && searchTerm.length % 2 === 0 && searchTerm.length > 0);
-
-            if (regexMode || looksHex) {
-                if (window.notificationSystem) {
-                    window.notificationSystem.info('A busca em todas as abas est� dispon�vel apenas para texto nesta fase.', 'Busca Multi-Abas');
-                }
-            } else if (window.fileTabManager && typeof window.fileTabManager.searchTextAcrossSessions === 'function') {
-                const groupedSearch = await window.fileTabManager.searchTextAcrossSessions(searchTerm, caseSensitive, wholeWord);
-                this.searchMode = 'text';
-                this.globalTabSearchActive = true;
-                this.globalTabSearchGroups = groupedSearch.groups || [];
-                this.globalTabSearchSkippedLargeCount = groupedSearch.skippedLargeCount || 0;
-                this.searchResults = groupedSearch.flatResults || [];
-                this.updateSearchResults();
-
-                if (this.searchResults.length > 0) {
-                    this.currentSearchIndex = 0;
-                    this.goToSearchResult(0);
-                } else {
-                    this.render();
-                }
-
-                if (this.syncSearchWindow) {
-                    this.syncSearchWindow();
-                }
-                return;
-            }
-        }
 
         const fileSize = this.getDataLength();
         const currentTable = this.charTables && this.currentCharTable ? this.charTables[this.currentCharTable] : null;

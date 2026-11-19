@@ -134,15 +134,28 @@ updateBookmarksList() {
             item.classList.add('current');
         }
 
-        item.innerHTML = `
-            <div class="bookmark-offset">0x${bookmark.offset.toString(16).toUpperCase().padStart(8, '0')}</div>
-            <div style="font-weight: bold; color: #fff; margin: 4px 0;">${bookmark.title}</div>
-            ${bookmark.comment ? `<div class="bookmark-comment">${bookmark.comment}</div>` : ''}
-            <div class="bookmark-actions">
-                <button class="bookmark-action" onclick="hexEditor.editBookmark(${bookmark.id})" data-i18n-title="tool.bookmark.edit" title="${window.I18n ? window.I18n.t('tool.bookmark.edit') : 'Edit'}">✏️</button>
-                <button class="bookmark-action" onclick="hexEditor.removeBookmark(${bookmark.id})" data-i18n-title="tool.bookmark.delete" title="${window.I18n ? window.I18n.t('tool.bookmark.delete') : 'Delete'}">🗑️</button>
-            </div>
-        `;
+        item.innerHTML = [
+            '<div class="bookmark-offset"></div>',
+            '<div class="bookmark-title" style="font-weight:bold;color:#fff;margin:4px 0"></div>',
+            '<div class="bookmark-actions">',
+            '<button class="bookmark-action bookmark-edit" data-i18n-title="tool.bookmark.edit">✏️</button>',
+            '<button class="bookmark-action bookmark-delete" data-i18n-title="tool.bookmark.delete">🗑️</button>',
+            '</div>'
+        ].join('');
+        item.querySelector('.bookmark-offset').textContent = '0x' + bookmark.offset.toString(16).toUpperCase().padStart(8, '0');
+        item.querySelector('.bookmark-title').textContent = bookmark.title;
+        if (bookmark.comment) {
+            const comment = document.createElement('div');
+            comment.className = 'bookmark-comment';
+            comment.textContent = bookmark.comment;
+            item.insertBefore(comment, item.querySelector('.bookmark-actions'));
+        }
+        const editButton = item.querySelector('.bookmark-edit');
+        editButton.title = window.I18n?.t('tool.bookmark.edit') || 'Editar';
+        editButton.addEventListener('click', () => this.editBookmark(bookmark.id));
+        const deleteButton = item.querySelector('.bookmark-delete');
+        deleteButton.title = window.I18n?.t('tool.bookmark.delete') || 'Excluir';
+        deleteButton.addEventListener('click', () => this.removeBookmark(bookmark.id));
 
         item.addEventListener('click', (e) => {
             if (!e.target.classList.contains('bookmark-action')) {

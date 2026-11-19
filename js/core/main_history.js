@@ -148,9 +148,27 @@ saveState(description, options = {}) {
     this.history.push(state);
     this.historyIndex++;
 
-    if (this.history.length > this.maxHistorySize) {
-        this.history.shift();
-        this.historyIndex--;
+    // Bound the memory retained by undo snapshots, including structural edits.
+    let historyBytes = 0;
+    const buffers = new Set();
+    for (let index = this.history.length - 1; index >= 0; index--) {
+        const entry = this.history[index];
+        const snapshot = entry.data || entry.snapshot;
+        const arrays = snapshot instanceof Uint8Array
+            ? [snapshot]
+            : (snapshot?.virtualSegments || []).filter(segment => segment.type === 'insert').map(segment => segment.data);
+        historyBytes += (snapshot?.modifiedOverlay?.size || 0) * 48;
+        for (const bytes of arrays) {
+            if (!buffers.has(bytes.buffer)) {
+                historyBytes += bytes.buffer.byteLength;
+                buffers.add(bytes.buffer);
+            }
+        }
+        if (index < this.historyIndex && (historyBytes > 32 * 1024 * 1024 || this.history.length - index > this.maxHistorySize)) {
+            this.history.splice(0, index + 1);
+            this.historyIndex -= index + 1;
+            break;
+        }
     }
 
     this.updateHistoryUI();
@@ -160,6 +178,7 @@ saveState(description, options = {}) {
 },
 
 restoreState(state) {
+    this.documentBytesChanged?.();
     if (this.editingBytes && this.editingBytes.size > 0) {
         this.editingBytes.clear();
     }
@@ -169,8 +188,7 @@ restoreState(state) {
         this.cursorPosition = state.cursorPosition;
         this.modifiedBytes = new Set(state.modifiedBytes);
         this.restoreDataSnapshot(state.snapshot);
-        this.clearVirtualOverlayIfPristine();
-        this.hasUnsavedChanges = this.modifiedBytes.size > 0;
+        this.hasUnsavedChanges = this.modifiedBytes.size > 0 || !!this.hasVirtualStructuralChanges?.() || !!this.hasVirtualOverlayChanges?.();
         this.render();
         return this;
     }
@@ -178,7 +196,8 @@ restoreState(state) {
     this.restoreDataSnapshot(state.data);
     this.cursorPosition = state.cursorPosition;
     this.modifiedBytes = new Set(state.modifiedBytes);
-    this.hasUnsavedChanges = this.modifiedBytes.size > 0;
+    this.hasUnsavedChanges = state.data !== this.originalData;
+    if (!this.hasUnsavedChanges) this.modifiedBytes.clear();
     this.render();
     return this;
 },
@@ -195,17 +214,11 @@ clearHistory() {
 },
 
 undo() {
+    if (this.isDocumentEditLocked?.()) return this;
     if (this.historyIndex > 0) {
         this.historyIndex--;
         const state = this.history[this.historyIndex];
         this.restoreState(state);
-        if (this.historyIndex === 0) {
-            this.modifiedBytes.clear();
-            this.hasUnsavedChanges = false;
-            this.clearVirtualOverlayIfPristine();
-        } else if (this.modifiedBytes.size === 0) {
-            this.clearVirtualOverlayIfPristine();
-        }
         this.updateHistoryUI();
         this.updateButtons();
         if (window.intelligentSave) {
@@ -221,6 +234,7 @@ undo() {
 },
 
 redo() {
+    if (this.isDocumentEditLocked?.()) return this;
     if (this.historyIndex < this.history.length - 1) {
         this.historyIndex++;
         const state = this.history[this.historyIndex];
@@ -262,6 +276,7 @@ updateHistoryUI() {
 },
 
 goToHistoryState(index) {
+    if (this.isDocumentEditLocked?.()) return this;
     if (index >= 0 && index < this.history.length) {
         this.historyIndex = index;
         const state = this.history[index];

@@ -3,6 +3,7 @@ const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
 const os = require('os');
+require('./document_search');
 
 
 const chunkSaveCache = new Map();
@@ -67,7 +68,7 @@ ipcMain.handle('show-open-dialog', async (event, options = {}) => {
             filters: options.filters || [
                 { name: 'Todos os arquivos', extensions: ['*'] }
             ],
-            properties: ['openFile']
+            properties: process.platform === 'win32' ? ['openFile', 'dontAddToRecent'] : ['openFile']
         });
         
         return result;
@@ -81,6 +82,7 @@ ipcMain.handle('show-save-dialog', async (event, options = {}) => {
     try {
         const result = await dialog.showSaveDialog({
             title: 'Salvar Arquivo',
+            properties: process.platform === 'win32' ? ['dontAddToRecent'] : [],
             defaultPath: options.defaultPath || 'arquivo_editado.bin',
             filters: options.filters || [
                 { name: 'Todos os arquivos', extensions: ['*'] },

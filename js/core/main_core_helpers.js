@@ -8,12 +8,12 @@ normalizeOffsetNumber(value) {
 },
 
 getLargeFileModeThreshold() {
-    return 800 * 1024 * 1024;
+    return 8 * 1024 * 1024;
 },
 
 shouldUseLargeFileMode(fileOrSize) {
     const size = typeof fileOrSize === 'number' ? fileOrSize : Number(fileOrSize?.size || 0);
-    return size > this.getLargeFileModeThreshold();
+    return fileOrSize?.forceVirtual === true || size >= this.getLargeFileModeThreshold();
 },
 
 getOffsetDisplayBase() {
@@ -581,10 +581,11 @@ detachDataProvider() {
 switchToMemorySnapshot(snapshot, options = {}) {
     const {
         resetState = true,
-        initializeScrolling = true
+        initializeScrolling = true,
+        shareSnapshot = false
     } = options;
 
-    const restored = snapshot instanceof Uint8Array ? new Uint8Array(snapshot) : new Uint8Array(snapshot || 0);
+    const restored = shareSnapshot && snapshot instanceof Uint8Array ? snapshot : new Uint8Array(snapshot || 0);
 
     this.exitVirtualDataMode?.();
 
@@ -593,7 +594,7 @@ switchToMemorySnapshot(snapshot, options = {}) {
     }
 
     this.setDataProvider(new window.MemoryHexDataProvider(restored));
-    this.originalData = new Uint8Array(restored);
+    this.originalData = this.createDataSnapshot();
 
     if (initializeScrolling && typeof this.initializeAdvancedScrolling === 'function') {
         this.initializeAdvancedScrolling();
@@ -694,7 +695,7 @@ dispatchVirtualNavigation(methodName) {
 
 clearVirtualOverlayIfPristine() {
     const handler = this.getVirtualNavigationHandler();
-    if (handler && this.modifiedBytes.size === 0 && typeof handler.clearOverlay === 'function') {
+    if (handler && this.modifiedBytes.size === 0 && !handler.hasStructuralChanges?.() && typeof handler.clearOverlay === 'function') {
         handler.clearOverlay();
         this.hasUnsavedChanges = false;
         return true;
@@ -769,16 +770,7 @@ shouldUseLightweightHistorySnapshot() {
 },
 
 markSavedState() {
-    const totalSize = this.getDataLength();
-    if (!this.isLargeFileActive() && totalSize < 200 * 1024 * 1024) {
-        const currentData = this.getData();
-        if (currentData instanceof Uint8Array) {
-            this.originalData = new Uint8Array(currentData);
-        }
-    } else {
-        this.originalData = this.createDataSnapshot();
-    }
-
+    this.originalData = this.createDataSnapshot();
     this.hasUnsavedChanges = false;
     this.modifiedBytes.clear();
     if (this.editingBytes && this.editingBytes.size > 0) {
@@ -803,11 +795,37 @@ syncProviderDataReference() {
     return this;
 },
 
+isDocumentEditLocked() {
+    const tabs = window.fileTabManager;
+    return tabs?.isSwitchingSession || window.intelligentSave?.isSessionSaving(tabs?.activeSessionId);
+},
+
+documentBytesChanged() {
+    this.documentRevision = (this.documentRevision || 0) + 1;
+    this.cancelDocumentSearch?.();
+    const results = this.searchResults;
+    if (!results?.length || this.pendingSearchInvalidation === results) return;
+    this.pendingSearchInvalidation = results;
+    queueMicrotask(() => {
+        if (this.pendingSearchInvalidation !== results) return;
+        this.pendingSearchInvalidation = null;
+        if (this.searchResults !== results) return;
+        this.searchResults = [];
+        this.globalTabSearchGroups = [];
+        this.currentSearchIndex = -1;
+        this.searchNotice = 'Os dados mudaram. Execute a busca novamente.';
+        this.updateSearchResults();
+        this.syncSearchWindow?.();
+    });
+},
+
 setByteAt(offset, value) {
+    if (this.isDocumentEditLocked()) return false;
     if (this.dataProvider) {
         const changed = this.dataProvider.setByteSync(offset, value);
         if (changed) {
             this.syncProviderDataReference();
+            this.documentBytesChanged();
         }
         return changed;
     }
@@ -917,10 +935,12 @@ async getSelectionBytesAsync(start, end) {
 },
 
 replaceRangeAt(offset, length, newBytes) {
+    if (this.isDocumentEditLocked()) return false;
     if (this.dataProvider) {
         const changed = this.dataProvider.replaceRangeSync(offset, length, newBytes);
         if (changed) {
             this.syncProviderDataReference();
+            this.documentBytesChanged();
         }
         return changed;
     }
@@ -936,23 +956,27 @@ replaceRangeAt(offset, length, newBytes) {
 },
 
 insertRangeAt(offset, newBytes) {
+    if (this.isDocumentEditLocked()) return false;
     if (!this.dataProvider || typeof this.dataProvider.insertRangeSync !== 'function') {
         return false;
     }
     const changed = this.dataProvider.insertRangeSync(offset, newBytes);
     if (changed) {
         this.syncProviderDataReference();
+        this.documentBytesChanged();
     }
     return changed;
 },
 
 deleteRangeAt(start, end) {
+    if (this.isDocumentEditLocked()) return false;
     if (!this.dataProvider || typeof this.dataProvider.deleteRangeSync !== 'function') {
         return false;
     }
     const changed = this.dataProvider.deleteRangeSync(start, end);
     if (changed) {
         this.syncProviderDataReference();
+        this.documentBytesChanged();
     }
     return changed;
 },
@@ -972,9 +996,9 @@ restoreDataSnapshot(snapshot) {
         return this;
     }
 
-    const restored = snapshot instanceof Uint8Array ? new Uint8Array(snapshot) : new Uint8Array(snapshot || 0);
+    const restored = snapshot instanceof Uint8Array ? snapshot : new Uint8Array(snapshot || 0);
     this.setDataProvider(new window.MemoryHexDataProvider(restored));
-    this.originalData = new Uint8Array(restored);
+    this.dataProvider.snapshot();
     return this;
 },
 
@@ -991,7 +1015,7 @@ loadData(data) {
     }
 
     this.setDataProvider(new window.MemoryHexDataProvider(normalizedData));
-    this.originalData = new Uint8Array(this.data);
+    this.originalData = this.createDataSnapshot();
     this.cursorPosition = 0;
     this.selectionStart = 0;
     this.selectionEnd = 0;

@@ -39,42 +39,27 @@ goToSearchResult(index) {
     const targetPanel = isHexResult ? 'hex' : 'ascii';
 
     if (targetSessionId && fileTabManager && fileTabManager.activeSessionId !== targetSessionId) {
-        const globalSearchState = this.globalTabSearchActive ? {
-            active: true,
-            groups: Array.isArray(this.globalTabSearchGroups) ? this.globalTabSearchGroups : [],
-            skippedLargeCount: this.globalTabSearchSkippedLargeCount || 0,
-            results: Array.isArray(this.searchResults) ? this.searchResults.map((item) => ({ ...item })) : [],
-            currentSearchIndex: index,
-            lastSearchTerm: this.lastSearchTerm || '',
-            searchMode: this.searchMode || 'text'
-        } : null;
-
+        const results = this.searchResults;
+        if (!fileTabManager.getSessionById(targetSessionId)) return false;
         fileTabManager.activateSession(targetSessionId).then(() => {
-            if (globalSearchState) {
-                this.globalTabSearchActive = globalSearchState.active;
-                this.globalTabSearchGroups = globalSearchState.groups;
-                this.globalTabSearchSkippedLargeCount = globalSearchState.skippedLargeCount;
-                this.searchResults = globalSearchState.results;
-                this.currentSearchIndex = globalSearchState.currentSearchIndex;
-                this.lastSearchTerm = globalSearchState.lastSearchTerm;
-                this.searchMode = globalSearchState.searchMode;
-            }
-
+            if (fileTabManager.activeSessionId !== targetSessionId || this.searchResults !== results) return;
             this.updateSearchResults();
             this.goToSearchResult(index);
-            if (this.syncSearchWindow) this.syncSearchWindow();
-        }).catch((error) => {
-            console.error('Erro ao ativar aba do resultado da busca:', error);
-        });
+            this.syncSearchWindow?.();
+        }).catch(error => console.error('Erro ao ativar aba do resultado:', error));
 
         return true;
     }
 
+    this.searchPreviewPage = Math.floor(index / (this.getSearchWindowPreviewLimit?.() || 100));
+    const isCurrent = () => this.searchResults[this.currentSearchIndex] === result &&
+        (!targetSessionId || fileTabManager?.activeSessionId === targetSessionId);
     this._isNavigatingFromSearch = true;
     this.activePanel = targetPanel;
     this.navigateToOffset(result.offset);
 
     setTimeout(() => {
+        if (!isCurrent()) return;
         this.activePanel = targetPanel;
         this.setCursor(result.offset, null, false);
         this.setSelection(result.offset, result.offset + result.length - 1);
@@ -87,6 +72,8 @@ goToSearchResult(index) {
     }, 100);
 
     setTimeout(() => {
+        this._isNavigatingFromSearch = false;
+        if (!isCurrent()) return;
         this.activePanel = targetPanel;
         this.renderCurrentView(true);
         if (this.needsDomCursorVisibilitySync()) {
@@ -106,6 +93,11 @@ goToSearchResult(index) {
 },
 
 clearSearch() {
+    this.cancelDocumentSearch?.();
+    this.lastDocumentSearchOptions = null;
+    this.searchNotice = '';
+    this.searchTruncated = false;
+    this.searchPreviewPage = 0;
     this.searchResults = [];
     this.currentSearchIndex = -1;
     this.lastSearchTerm = '';
@@ -124,17 +116,20 @@ clearSearch() {
 },
 
 updateSearchResults() {
-    // Sincronizar o Set de resultados para busca rápida O(1) na renderização
-    if (!this.searchResultsSet) this.searchResultsSet = new Set();
-    this.searchResultsSet.clear();
     const activeSessionId = window.fileTabManager?.activeSessionId || null;
-    const visibleResults = this.globalTabSearchActive && activeSessionId
-        ? this.searchResults.filter((result) => !result.sessionId || result.sessionId === activeSessionId)
-        : this.searchResults;
-    for (const result of visibleResults) {
-        for (let i = 0; i < result.length; i++) {
-            this.searchResultsSet.add(result.offset + i);
+    const indexed = this.searchHighlightIndex;
+    if (indexed?.results !== this.searchResults || indexed.count !== this.searchResults.length ||
+        indexed.activeSessionId !== activeSessionId) {
+        const results = this.searchResults
+            .filter(result => !result.sessionId || result.sessionId === activeSessionId)
+            .sort((a, b) => a.offset - b.offset);
+        const intervals = [];
+        for (const { offset, length } of results) {
+            const last = intervals.at(-1);
+            if (last && offset <= last.end) last.end = Math.max(last.end, offset + length);
+            else intervals.push({ start: offset, end: offset + length });
         }
+        this.searchHighlightIndex = { results: this.searchResults, count: this.searchResults.length, activeSessionId, intervals };
     }
 
     const modalResultsElement = document.getElementById('modal-search-results');

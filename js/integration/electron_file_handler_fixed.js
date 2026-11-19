@@ -59,16 +59,17 @@ class ElectronFileHandler {
         return size > this.getElectronInMemoryLimit();
     }
 
-    showSaveProgressModal(title = 'Salvando arquivo...') {
+    showSaveProgressModal(title = 'Salvando arquivo...', allowTabNavigation = false) {
         if (typeof document === 'undefined') return;
         if (document.getElementById('save-progress-modal')) return;
 
         const modal = document.createElement('div');
         modal.id = 'save-progress-modal';
+        const placement = allowTabNavigation
+            ? 'position: fixed; bottom: 36px; right: 24px; pointer-events: none; z-index: 9999999;'
+            : 'position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 9999999;';
         modal.innerHTML = `
-            <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-                        background: rgba(0,0,0,0.8); display: flex; justify-content: center;
-                        align-items: center; z-index: 9999999;">
+            <div style="${placement}" role="status">
                 <div style="background: linear-gradient(135deg, #1a1a2e, #16213e);
                             padding: 30px; border-radius: 12px; text-align: center;
                             min-width: 360px; border: 1px solid rgba(255, 255, 255, 0.1);
@@ -94,7 +95,8 @@ class ElectronFileHandler {
         const titleEl = document.getElementById('save-progress-title');
 
         if (fill) {
-            fill.style.width = `${Math.max(0, Math.min(100, Math.round(percent)))}%`;
+            const width = `${Math.max(0, Math.min(100, Math.round(percent)))}%`;
+            if (fill.style.width !== width) fill.style.width = width;
         }
         if (text && message) {
             text.textContent = message;
@@ -247,22 +249,6 @@ class ElectronFileHandler {
         }
     }
 
-    // NOVO: Escrever bytes em offsets específicos (patch) sem reescrever o arquivo todo
-    async writeAtOffset(filePath, offset, uint8Data) {
-        if (!this.isElectron || !ipcRenderer) {
-            throw new Error('Este método só funciona no Electron');
-        }
-        if (!(uint8Data instanceof Uint8Array)) {
-            throw new Error('uint8Data deve ser Uint8Array');
-        }
-        const result = await window.ipcRenderer.invoke('write-at-offset', { filePath, offset, data: uint8Data });
-        if (!result || !result.success) {
-            throw new Error(result?.error || 'Falha ao escrever em offset');
-        }
-        return true;
-    }
-
-    // NOVO: Salvamento direto otimizado para arquivos médios (até 500MB)
     buildContiguousRanges(entries) {
         if (!Array.isArray(entries) || entries.length === 0) {
             return [];
@@ -290,17 +276,147 @@ class ElectronFileHandler {
         return ranges;
     }
 
-    async applyOverlayEntries(filePath, overlayEntries) {
-        if (!Array.isArray(overlayEntries) || overlayEntries.length === 0) {
-            return true;
+    async writeAtomicDocument(filePath, write, expectedVersion = null) {
+        const { promises: fs } = require('node:fs');
+        const path = require('node:path');
+        const { randomUUID } = require('node:crypto');
+        const temporary = path.join(path.dirname(filePath), `.foxy-${randomUUID()}.tmp`);
+        const previous = await fs.stat(filePath).catch(error => {
+            if (error.code !== 'ENOENT') throw error;
+            return null;
+        });
+        if (expectedVersion && !sameDocumentDiskVersion(expectedVersion, previous)) {
+            throw new Error('O arquivo foi alterado por outro programa. Use Salvar como para preservar sua edição.');
+        }
+        const handle = await fs.open(temporary, 'wx+', previous?.mode);
+        try {
+            try {
+                await write(handle, temporary);
+                if (previous) await handle.chmod(previous.mode);
+                await handle.sync();
+            } finally {
+                await handle.close();
+            }
+            const current = await fs.stat(filePath).catch(error => {
+                if (error.code !== 'ENOENT') throw error;
+                return null;
+            });
+            if (!!previous !== !!current || (previous && !sameDocumentDiskVersion(documentDiskVersion(previous), current))) {
+                throw new Error('O arquivo de destino mudou durante a gravação.');
+            }
+            await fs.rename(temporary, filePath);
+        } catch (error) {
+            await fs.unlink(temporary).catch(cleanupError => console.error(cleanupError));
+            throw error;
+        }
+    }
+
+    async writeDocumentRange(handle, bytes, position) {
+        let written = 0;
+        while (written < bytes.length) {
+            const { bytesWritten } = await handle.write(bytes, written, bytes.length - written, position + written);
+            if (!bytesWritten) throw new Error('Gravação incompleta.');
+            written += bytesWritten;
+        }
+    }
+
+    getDocumentByteSource() {
+        const path = require('node:path');
+        const root = path.dirname(require('node:url').fileURLToPath(window.location.href));
+        return require(path.join(root, 'js/core/file-byte-source.js'));
+    }
+
+    async exportDocumentRange(filePath, sourcePath, snapshot, start, length) {
+        const source = sourcePath ? await this.getDocumentByteSource().openByteSource(sourcePath, snapshot) : null;
+        this.showSaveProgressModal('Exportando seleção…');
+        try {
+            await this.writeAtomicDocument(filePath, async handle => {
+                const blockSize = 4 * 1024 * 1024;
+                for (let offset = 0; offset < length; offset += blockSize) {
+                    const count = Math.min(blockSize, length - offset);
+                    const position = start + offset;
+                    const bytes = source ? await source.read(position, count) : snapshot.subarray(position, position + count);
+                    if (bytes.length !== count) throw new Error('Leitura incompleta durante a exportação.');
+                    await this.writeDocumentRange(handle, bytes, offset);
+                    this.updateSaveProgress(Math.round((offset + count) * 100 / length));
+                }
+                await source?.verify();
+            });
+        } finally {
+            this.hideSaveProgressModal();
+            await source?.close();
+        }
+    }
+
+    async writeVirtualDocument({ sourcePath, snapshot, structural }, filePath, sameFile) {
+        const { promises: fs, constants } = require('node:fs');
+        const { openByteSource, readExactly } = this.getDocumentByteSource();
+        const patches = this.buildContiguousRanges([...snapshot.modifiedOverlay]);
+
+        if (sameFile && !structural) {
+            if (!patches.length) return;
+            const handle = await fs.open(filePath, 'r+');
+            const rollback = [];
+            try {
+                const stats = await handle.stat();
+                if (stats.size !== snapshot.sourceFileSize ||
+                    (snapshot.diskVersion && !sameDocumentDiskVersion(snapshot.diskVersion, stats))) {
+                    throw new Error('O arquivo foi alterado por outro programa. Suas edições continuam na aba.');
+                }
+                for (const { offset, data } of patches) {
+                    const original = new Uint8Array(data.length);
+                    await readExactly(handle, original, 0, data.length, offset);
+                    rollback.push({ offset, data: original });
+                    await this.writeDocumentRange(handle, data, offset);
+                }
+                await handle.sync();
+            } catch (error) {
+                for (const { offset, data } of rollback) {
+                    await this.writeDocumentRange(handle, data, offset);
+                }
+                if (rollback.length) await handle.sync();
+                throw error;
+            } finally {
+                await handle.close();
+            }
+            return;
         }
 
-        const ranges = this.buildContiguousRanges(overlayEntries);
-        for (const range of ranges) {
-            await this.writeAtOffset(filePath, range.offset, range.data);
-        }
+        this.showSaveProgressModal('Salvando arquivo...', true);
+        try {
+            await this.writeAtomicDocument(filePath, async (handle, temporary) => {
+                if (sourcePath && !structural) {
+                    const source = await openByteSource(sourcePath, snapshot);
+                    try {
+                        this.updateSaveProgress(0, 'Copiando arquivo no disco…');
+                        await fs.copyFile(sourcePath, temporary, constants.COPYFILE_FICLONE);
+                        for (const { offset, data } of patches) await this.writeDocumentRange(handle, data, offset);
+                        await source.verify();
+                    } finally {
+                        await source.close();
+                    }
+                    if ((await handle.stat()).size !== snapshot.fileSize) throw new Error('Cópia incompleta.');
+                    return;
+                }
 
-        return true;
+                const source = await openByteSource(sourcePath, snapshot);
+                try {
+                    const blockSize = 4 * 1024 * 1024;
+                    for (let offset = 0; offset < snapshot.fileSize; offset += blockSize) {
+                        const length = Math.min(blockSize, snapshot.fileSize - offset);
+                        const data = await source.read(offset, length);
+                        if (data.length !== length) throw new Error('Leitura incompleta durante o salvamento.');
+                        await this.writeDocumentRange(handle, data, offset);
+                        this.updateSaveProgress(Math.round((offset + length) * 100 / snapshot.fileSize));
+                    }
+                    await source.verify();
+                } finally {
+                    await source.close();
+                }
+            }, sameFile ? snapshot.diskVersion : null);
+        } finally {
+            this.hideSaveProgressModal();
+        }
     }
 
     async saveFileDirectOptimized(filePath, data) {
@@ -525,117 +641,6 @@ class ElectronFileHandler {
             console.error('[ELECTRON] Erro ao ler chunk seguro:', error);
             throw error;
         }
-    }
-
-    async copyFile(sourcePath, targetPath, _useProgressBar = false) {
-        if (!this.isElectron) {
-            throw new Error('Copia de arquivo so funciona no Electron');
-        }
-
-        try {
-            const fsNative = require('fs').promises;
-            await fsNative.copyFile(sourcePath, targetPath);
-            return true;
-        } catch (error) {
-            console.error('❌ [ELECTRON] Erro ao copiar arquivo:', error);
-            throw error;
-        }
-    }
-
-    async saveLargeFileAsWithOverlay(sourcePath, targetPath, overlayEntries, useProgressBar = false) {
-        await this.copyFile(sourcePath, targetPath, useProgressBar);
-
-        if (!Array.isArray(overlayEntries) || overlayEntries.length === 0) {
-            return true;
-        }
-
-        return this.applyOverlayEntries(targetPath, overlayEntries);
-    }
-
-    async saveLargeFileAsTransformed(sourcePath, targetPath, handler) {
-        if (!handler || typeof handler.getBytes !== 'function') {
-            throw new Error('Handler de arquivo grande inválido');
-        }
-
-        const totalSize = handler.fileSize || 0;
-        this.showSaveProgressModal('Salvando arquivo...');
-        this.updateSaveProgress(0, 'Preparando reconstrução do arquivo...');
-        const initResult = await window.ipcRenderer.invoke('init-chunked-save', {
-            filePath: targetPath,
-            totalSize,
-            chunkSize: this.saveChunkSize
-        });
-
-        if (!initResult || !initResult.success) {
-            throw new Error(initResult?.error || 'Falha ao iniciar salvamento transformado');
-        }
-
-        const totalChunks = Math.ceil(totalSize / this.saveChunkSize);
-        for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-            const start = chunkIndex * this.saveChunkSize;
-            const length = Math.min(this.saveChunkSize, totalSize - start);
-            const chunkData = await handler.getBytes(start, length);
-            const chunkResult = await window.ipcRenderer.invoke('save-chunk', {
-                filePath: targetPath,
-                chunkIndex,
-                chunkData,
-                isLastChunk: chunkIndex === totalChunks - 1
-            });
-
-            if (!chunkResult || !chunkResult.success) {
-                throw new Error(chunkResult?.error || `Falha ao salvar chunk ${chunkIndex}`);
-            }
-
-            const progress = Math.round(((chunkIndex + 1) / totalChunks) * 100);
-            const writtenMB = ((start + length) / (1024 * 1024)).toFixed(1);
-            const totalMB = (totalSize / (1024 * 1024)).toFixed(1);
-            this.updateSaveProgress(progress, `Reconstruindo ${writtenMB} MB de ${totalMB} MB`);
-        }
-
-        const finalizeResult = await window.ipcRenderer.invoke('finalize-chunked-save', {
-            filePath: targetPath
-        });
-
-        if (!finalizeResult || !finalizeResult.success) {
-            throw new Error(finalizeResult?.error || 'Falha ao finalizar salvamento transformado');
-        }
-
-        this.updateSaveProgress(100, 'Concluído');
-        this.hideSaveProgressModal(500);
-
-        return true;
-    }
-
-    async saveLargeFileWithStructureChanges(filePath, handler) {
-        if (!this.isElectron) {
-            throw new Error('Salvamento estrutural só funciona no Electron');
-        }
-
-        const fsNative = require('fs').promises;
-        const tempPath = `${filePath}.foxy-struct-${Date.now()}.tmp`;
-        const backupPath = `${filePath}.foxy-backup-${Date.now()}.bak`;
-        await this.saveLargeFileAsTransformed(filePath, tempPath, handler);
-
-        try {
-            this.showSaveProgressModal('Finalizando salvamento...');
-            this.updateSaveProgress(100, 'Trocando arquivo temporário pelo final...');
-            await fsNative.rename(filePath, backupPath);
-            await fsNative.rename(tempPath, filePath);
-            await fsNative.unlink(backupPath);
-            this.hideSaveProgressModal(400);
-        } catch (error) {
-            this.hideSaveProgressModal();
-            try {
-                await fsNative.access(filePath);
-            } catch (_missingCurrent) {
-                try {
-                    await fsNative.rename(backupPath, filePath);
-                } catch (_restoreError) {
-                }
-            }
-            throw error;
-        }
-        return true;
     }
 
     // Verifica se arquivo é muito grande (sem limite no Electron para arquivos até 800MB)

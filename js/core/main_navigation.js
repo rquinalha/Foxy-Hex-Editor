@@ -176,27 +176,23 @@ setSelection(start, end) {
 },
 
 getSelection() {
-    const start = Math.min(this.selectionStart, this.selectionEnd);
-    const end = Math.max(this.selectionStart, this.selectionEnd);
-    const isCollapsed = start === end && this.canUseInsertCursor();
-    return {
-        start,
-        end,
-        length: isCollapsed ? 0 : (end - start + 1),
-        data: isCollapsed ? new Uint8Array(0) : this.getRangeAt(start, end - start + 1)
-    };
+    const start = Math.max(0, Math.min(this.selectionStart, this.selectionEnd));
+    const end = Math.min(this.getDataLength() - 1, Math.max(this.selectionStart, this.selectionEnd));
+    const length = this.canUseInsertCursor() && start === end ? 0 : Math.max(0, end - start + 1);
+    return { start, end, length };
 },
 
-async getSelectionAsync() {
-    const start = Math.min(this.selectionStart, this.selectionEnd);
-    const end = Math.max(this.selectionStart, this.selectionEnd);
-    const isCollapsed = start === end && this.canUseInsertCursor();
-    return {
-        start,
-        end,
-        length: isCollapsed ? 0 : (end - start + 1),
-        data: isCollapsed ? new Uint8Array(0) : await this.getSelectionBytesAsync(start, end)
-    };
+async readClipboardSelection(selection) {
+    if (selection.length > 1024 * 1024) {
+        window.notificationSystem?.warning('Para seleções maiores que 1 MiB, use Exportar seleção.', 'Área de transferência');
+        return null;
+    }
+    try {
+        return await this.getSelectionBytesAsync(selection.start, selection.end);
+    } catch (error) {
+        window.notificationSystem?.error(error.message, 'Área de transferência');
+        return null;
+    }
 },
 
 goToOffset(offset) {
@@ -373,11 +369,8 @@ async copySelection() {
 
     let textToCopy = '';
     
-    // Suporte para arquivos grandes onde selection.data é uma Promise
-    let selData = selection.data;
-    if (selData instanceof Promise) {
-        selData = await selData;
-    }
+    const selData = await this.readClipboardSelection(selection);
+    if (!selData) return;
 
     if (this.activePanel === 'hex') {
         textToCopy = Array.from(selData)

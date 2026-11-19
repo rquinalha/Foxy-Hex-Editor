@@ -250,10 +250,12 @@ class FileTabSessionManager {
     }
 
     getSessionFileKey(fileLike) {
-        const path = fileLike?.path || fileLike?.webkitRelativePath || '';
-        const name = fileLike?.name || '';
-        const size = Number(fileLike?.size || 0);
-        return `${path}::${name}::${size}`;
+        const filePath = fileLike?.path || this.hexEditor?.resolveLoadedFilePath?.(fileLike);
+        if (filePath) {
+            const normalized = require('node:path').normalize(filePath);
+            return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+        }
+        return fileLike;
     }
 
     findSessionByFile(fileLike) {
@@ -272,127 +274,22 @@ class FileTabSessionManager {
         }
 
         session.fileName = editor.currentFileName || session.fileName || 'Sem título';
-        session.filePath = editor.getResolvedCurrentFilePath?.() || session.filePath || null;
+        session.filePath = editor.getResolvedCurrentFilePath?.() || null;
         session.currentFileName = editor.currentFileName || session.currentFileName || session.fileName;
         session.currentFileExtension = editor.currentFileExtension || session.currentFileExtension || '';
         session.fileSize = typeof editor.getDataLength === 'function' ? editor.getDataLength() : session.fileSize;
         session.hasUnsavedChanges = !!editor.hasUnsavedChanges;
-        session.fileRef = {
-            name: session.fileName,
-            path: session.filePath,
-            size: session.fileSize
-        };
-        session.fileKey = this.getSessionFileKey(session.fileRef);
-    }
-
-    createSearchContext(session, data) {
-        const editor = this.hexEditor;
-        const tableStore = Object.assign({}, editor.charTables || {});
-
-        if (session.currentCharTable === 'custom' && session.selectedCharTable) {
-            tableStore.custom = this.cloneValue(session.selectedCharTable);
-        }
-        if (session.currentCharTable === 'custom16bit' && session.selectedCharTable) {
-            tableStore.custom16bit = this.cloneValue(session.selectedCharTable);
-        }
-
-        let charDecoder16 = null;
-        const activeTable = tableStore[session.currentCharTable];
-        if (session.currentCharTable === 'custom16bit' && session.selectedCharTable) {
-            charDecoder16 = new CharDecoder16bit(session.selectedCharTable);
-        } else if (activeTable && (activeTable.type === '16-bit' || activeTable.type === 'UTF-16' || 
-                                  (activeTable.type && activeTable.type.includes && activeTable.type.includes('16-bit')))) {
-            charDecoder16 = new CharDecoder16bit(activeTable);
-        }
-
-        return {
-            charTables: tableStore,
-            currentCharTable: session.currentCharTable || 'ascii',
-            selectedCharTable: this.cloneValue(session.selectedCharTable || null),
-            charDecoder16,
-            searchResults: [],
-            emit() { return null; },
-            getDataLength() { return data.length; },
-            getByteAt(offset) { return data[offset]; },
-            getRangeAt(offset, length) { return data.slice(offset, offset + length); },
-            getCurrentCharacterTable: editor.getCurrentCharacterTable,
-            isCurrentTableShiftJIS: editor.isCurrentTableShiftJIS,
-            decodeBytesWithCurrentTable: editor.decodeBytesWithCurrentTable,
-            searchText: editor.searchText,
-            searchTextShiftJIS: editor.searchTextShiftJIS,
-            searchTextCustomTable: editor.searchTextCustomTable,
-            searchText16bit: editor.searchText16bit,
-            textToShiftJISBytes: editor.textToShiftJISBytes,
-            textToCustomTableBytes: editor.textToCustomTableBytes,
-            isWordBoundary: editor.isWordBoundary,
-            isWordBoundary16bit: editor.isWordBoundary16bit
-        };
-    }
-
-    buildSearchPreview(searchContext, data, offset, length) {
-        const currentTable = searchContext.getCurrentCharacterTable.call(searchContext);
-        const is16bit = !!(currentTable && (currentTable.type === '16-bit' || currentTable.type === 'UTF-16'));
-        const previewRadius = is16bit ? 8 : 16;
-        const start = Math.max(0, offset - previewRadius);
-        const end = Math.min(data.length, offset + length + previewRadius);
-        const bytes = data.slice(start, end);
-        let preview = searchContext.decodeBytesWithCurrentTable.call(searchContext, bytes) || '';
-        preview = preview.replace(/\s+/g, ' ').trim();
-        return preview || '(sem prévia)';
-    }
-
-    async searchTextAcrossSessions(searchTerm, caseSensitive = false, wholeWord = false) {
-        const activeSession = this.getSessionById(this.activeSessionId);
-        if (activeSession) {
-            this.captureEditorStateInto(activeSession);
-        }
-
-        const groups = [];
-        const flatResults = [];
-        let skippedLargeCount = 0;
-
-        for (const session of this.sessions) {
-            if (session.isLargeFile || !(session.snapshot instanceof Uint8Array)) {
-                skippedLargeCount++;
-                continue;
-            }
-
-            const data = session.snapshot;
-            const searchContext = this.createSearchContext(session, data);
-            const results = searchContext.searchText.call(searchContext, searchTerm, caseSensitive, wholeWord) || [];
-
-            if (!results.length) {
-                continue;
-            }
-
-            const group = {
-                sessionId: session.id,
-                fileName: this.getSessionTitle(session),
-                total: results.length,
-                results: []
+        const handler = editor.getVirtualNavigationHandler?.();
+        if (session.filePath || handler) {
+            session.fileRef = handler?.file && !session.filePath ? handler.file : {
+                name: session.fileName,
+                path: session.filePath,
+                size: handler?.sourceFileSize ?? session.fileSize,
+                forceVirtual: !!handler,
+                diskVersion: editor.currentDiskVersion
             };
-
-            results.forEach((result) => {
-                const globalIndex = flatResults.length;
-                const enrichedResult = {
-                    sessionId: session.id,
-                    fileName: this.getSessionTitle(session),
-                    offset: result.offset,
-                    offsetHex: result.offset.toString(16).toUpperCase().padStart(8, '0'),
-                    length: result.length,
-                    type: result.type || 'text',
-                    preview: this.buildSearchPreview(searchContext, data, result.offset, result.length),
-                    globalIndex
-                };
-
-                flatResults.push(enrichedResult);
-                group.results.push(enrichedResult);
-            });
-
-            groups.push(group);
+            session.fileKey = this.getSessionFileKey(session.fileRef);
         }
-
-        return { groups, flatResults, skippedLargeCount };
     }
 
     getSessionCustomTableState(editor, currentCharTable) {
@@ -424,18 +321,11 @@ class FileTabSessionManager {
             return session;
         }
 
-        session.snapshot = this.cloneValue(editor.createDataSnapshot());
-        session.originalData = this.cloneValue(editor.originalData);
+        session.snapshot = editor.createDataSnapshot();
+        session.diskVersion = editor.currentDiskVersion;
+        session.originalData = editor.originalData;
         this.updateSessionVisualMetaFromEditor(session);
         session.isLargeFile = !!editor.isLargeFileActive?.();
-
-        if (session.isLargeFile || (session.fileRef && editor.hasResolvedCurrentFilePath?.())) {
-            session.fileRef = {
-                name: session.fileName,
-                path: session.filePath,
-                size: session.fileSize
-            };
-        }
 
         session.cursorPosition = editor.cursorPosition || 0;
         session.selectionStart = editor.selectionStart || 0;
@@ -452,11 +342,17 @@ class FileTabSessionManager {
         session.highlightIdCounter = editor.highlightIdCounter || 0;
         session.currentHighlightColor = editor.currentHighlightColor || 'default';
         session.selectedHighlightId = editor.selectedHighlight?.id || null;
-        session.history = this.cloneValue(editor.history || []);
+        session.history = (editor.history || []).slice();
         session.historyIndex = typeof editor.historyIndex === 'number' ? editor.historyIndex : -1;
-        session.searchResults = this.cloneValue(editor.searchResults || []);
-        session.currentSearchIndex = typeof editor.currentSearchIndex === 'number' ? editor.currentSearchIndex : -1;
-        session.lastSearchTerm = editor.lastSearchTerm || '';
+        if (!editor.globalTabSearchActive) {
+            session.searchResults = (editor.searchResults || []).slice();
+            session.currentSearchIndex = editor.currentSearchIndex ?? -1;
+            session.lastSearchTerm = editor.lastSearchTerm || '';
+            session.searchMode = editor.searchMode;
+            session.searchNotice = editor.searchNotice;
+            session.searchTruncated = editor.searchTruncated;
+            session.lastDocumentSearchOptions = editor.lastDocumentSearchOptions;
+        }
         session.gameAnalysis = this.cloneValue(editor.gameAnalysis || {});
         session.currentCharTable = editor.currentCharTable || 'ascii';
         session.selectedCharTable = this.getSessionCustomTableState(editor, session.currentCharTable);
@@ -511,8 +407,9 @@ class FileTabSessionManager {
 
         editor.currentFileName = session.fileName || 'Sem título';
         editor.currentFilePath = session.filePath || null;
+        editor.currentDiskVersion = session.diskVersion || null;
         editor.currentFileExtension = session.currentFileExtension || editor.getFileExtension?.(session.fileName || '') || '';
-        editor.originalData = this.cloneValue(session.originalData) || this.cloneValue(session.snapshot);
+        editor.originalData = session.originalData || session.snapshot;
         editor.cursorPosition = session.cursorPosition || 0;
         editor.selectionStart = session.selectionStart || 0;
         editor.selectionEnd = session.selectionEnd || 0;
@@ -535,13 +432,16 @@ class FileTabSessionManager {
             editor.selectedHighlight = editor.highlights.get(session.selectedHighlightId);
         }
 
-        editor.history = this.cloneValue(session.history || []);
+        editor.history = (session.history || []).slice();
         editor.historyIndex = typeof session.historyIndex === 'number' ? session.historyIndex : -1;
         if (!editor.globalTabSearchActive) {
-            editor.searchResults = this.cloneValue(session.searchResults || []);
-            editor.searchResultsSet = new Set((session.searchResults || []).map((result) => result.offset));
+            editor.searchResults = (session.searchResults || []).slice();
             editor.currentSearchIndex = typeof session.currentSearchIndex === 'number' ? session.currentSearchIndex : -1;
             editor.lastSearchTerm = session.lastSearchTerm || '';
+            editor.searchMode = session.searchMode || 'text';
+            editor.searchNotice = session.searchNotice;
+            editor.searchTruncated = session.searchTruncated;
+            editor.lastDocumentSearchOptions = session.lastDocumentSearchOptions;
         }
         editor.gameAnalysis = this.cloneValue(session.gameAnalysis || {});
 
@@ -590,38 +490,73 @@ class FileTabSessionManager {
         }
 
         if (session.isLargeFile && session.fileRef) {
-            await editor.loadFile(session.fileRef);
-            editor.restoreDataSnapshot?.(this.cloneValue(session.snapshot));
+            await editor.loadFile(session.fileRef, { preserveSearch: true });
+            editor.restoreDataSnapshot?.(session.snapshot);
         } else {
-            const snapshot = this.cloneValue(session.snapshot);
-            editor.switchToMemorySnapshot?.(snapshot, {
+            const globalSearch = editor.globalTabSearchActive && {
+                searchResults: editor.searchResults,
+                lastSearchTerm: editor.lastSearchTerm,
+                currentSearchIndex: editor.currentSearchIndex
+            };
+            editor.switchToMemorySnapshot?.(session.snapshot, {
                 resetState: true,
-                initializeScrolling: true
+                initializeScrolling: true,
+                shareSnapshot: true
             });
+            if (globalSearch) Object.assign(editor, globalSearch);
         }
 
         this.applySessionState(session);
     }
 
+    beginSessionSwitch() {
+        this.isSwitchingSession = true;
+        this.sessionSwitchPromise = new Promise(resolve => { this.resolveSessionSwitch = resolve; });
+    }
+
+    endSessionSwitch() {
+        this.isSwitchingSession = false;
+        this.resolveSessionSwitch();
+        this.sessionSwitchPromise = null;
+        this.resolveSessionSwitch = null;
+    }
+
     async activateSession(sessionId) {
         const nextSession = this.sessions.find((session) => session.id === sessionId);
-        if (!nextSession || this.activeSessionId === sessionId || this.isSwitchingSession) {
+        if (!nextSession || this.activeSessionId === sessionId || this.isSwitchingSession || window.intelligentSave?.isSessionSaving(sessionId)) {
             return;
         }
 
+        if (!this.hexEditor.globalTabSearchActive) this.hexEditor.cancelDocumentSearch?.();
         const currentSession = this.sessions.find((session) => session.id === this.activeSessionId);
         if (currentSession) {
             this.captureEditorStateInto(currentSession);
         }
 
-        this.isSwitchingSession = true;
+        this.beginSessionSwitch();
+        const previousProvider = this.hexEditor.dataProvider;
         try {
-            this.activeSessionId = nextSession.id;
             await this.restoreSession(nextSession);
+            this.activeSessionId = nextSession.id;
             this.updateSessionVisualMetaFromEditor(nextSession);
+            this.hexEditor.updateSearchResults?.();
             this.renderTabs();
+            return true;
+        } catch (error) {
+            if (this.hexEditor.dataProvider !== previousProvider) {
+                try {
+                    if (!currentSession) throw error;
+                    await this.restoreSession(currentSession);
+                } catch (_) {
+                    this.activeSessionId = null;
+                    this.clearEditorState();
+                    this.renderTabs();
+                }
+            }
+            window.notificationSystem?.error(error.message, 'Erro ao trocar de aba');
+            return false;
         } finally {
-            this.isSwitchingSession = false;
+            this.endSessionSwitch();
         }
     }
 
@@ -700,86 +635,66 @@ class FileTabSessionManager {
 
     async openFiles(fileList) {
         const files = Array.from(fileList || []).filter(Boolean);
-        if (!files.length || !this.hexEditor) {
+        if (!files.length || !this.hexEditor || this.isSwitchingSession) {
             return;
         }
 
-        const activeSession = this.sessions.find((session) => session.id === this.activeSessionId);
-        if (activeSession) {
-            this.captureEditorStateInto(activeSession);
-        }
+        for (const file of files) {
+            if (this.getSessionFileKey(file) === window.intelligentSave?.savingTargetKey) continue;
+            const existingSession = this.findSessionByFile(file);
+            if (existingSession) {
+                await this.activateSession(existingSession.id);
+                continue;
+            }
 
-        this.isSwitchingSession = true;
-        try {
-            let lastOpenedSession = null;
-
-            for (const file of files) {
-                if (Number(file.size || 0) === 0) {
-                    if (window.notificationSystem) {
-                        window.notificationSystem.error(`O arquivo ${file.name} está vazio.`, 'Arquivo Vazio');
-                    }
-                    continue;
-                }
-
-                const existingSession = this.findSessionByFile(file);
-                if (existingSession) {
-                    lastOpenedSession = existingSession;
-                    continue;
-                }
-
+            const currentSession = this.getSessionById(this.activeSessionId);
+            if (currentSession) this.captureEditorStateInto(currentSession);
+            this.beginSessionSwitch();
+            try {
                 await this.hexEditor.loadFile(file);
                 const session = this.createSessionFromCurrentFile(file);
                 this.sessions.push(session);
-                lastOpenedSession = session;
+                this.activeSessionId = session.id;
+                this.renderTabs();
+            } catch (error) {
+                if (currentSession) await this.restoreSession(currentSession);
+                else this.clearEditorState();
+                throw error;
+            } finally {
+                this.endSessionSwitch();
             }
-
-            if (lastOpenedSession) {
-                this.activeSessionId = lastOpenedSession.id;
-            }
-
-            this.renderTabs();
-        } finally {
-            this.isSwitchingSession = false;
-        }
-
-        const active = this.sessions.find((session) => session.id === this.activeSessionId);
-        if (active) {
-            this.updateSessionVisualMetaFromEditor(active);
-            this.renderTabs();
         }
     }
 
+    confirmCloseWithUnsavedChanges(session) {
+        const message = `Fechar "${this.getSessionTitle(session)}" e perder as alterações não salvas?`;
+        if (!window.notificationSystem?.confirm) return Promise.resolve(window.confirm(message));
+        return new Promise(resolve => window.notificationSystem.confirm(
+            message, 'Alterações não salvas', () => resolve(true), () => resolve(false)
+        ));
+    }
+
     async closeSession(sessionId) {
-        const sessionIndex = this.sessions.findIndex((session) => session.id === sessionId);
-        if (sessionIndex === -1) {
-            return;
-        }
+        if (this.isSwitchingSession || window.intelligentSave?.isSessionSaving(sessionId)) return;
+        const session = this.getSessionById(sessionId);
+        if (!session) return;
+        if (this.activeSessionId === sessionId) this.captureEditorStateInto(session);
+        if (session.hasUnsavedChanges && !await this.confirmCloseWithUnsavedChanges(session)) return;
 
-        const session = this.sessions[sessionIndex];
-        if (session.id === this.activeSessionId) {
-            this.captureEditorStateInto(session);
-        }
-
-        if (session.hasUnsavedChanges) {
-            const confirmed = window.confirm(`Fechar "${this.getSessionTitle(session)}" e perder as alterações não salvas?`);
-            if (!confirmed) {
-                return;
-            }
-        }
-
-        this.sessions.splice(sessionIndex, 1);
-
+        const index = this.sessions.indexOf(session);
+        if (index < 0 || this.isSwitchingSession || window.intelligentSave?.isSessionSaving(sessionId)) return;
+        this.hexEditor.cancelDocumentSearch?.();
         if (this.activeSessionId === sessionId) {
-            const fallbackSession = this.sessions[Math.max(0, sessionIndex - 1)] || this.sessions[0] || null;
-            this.activeSessionId = null;
-
-            if (fallbackSession) {
-                await this.activateSession(fallbackSession.id);
-            } else {
+            const fallback = this.sessions[index - 1] || this.sessions[index + 1];
+            if (fallback && !await this.activateSession(fallback.id)) return;
+            if (!fallback) {
+                this.activeSessionId = null;
                 this.clearEditorState();
             }
         }
-
+        this.sessions.splice(this.sessions.indexOf(session), 1);
+        if (this.hexEditor.globalTabSearchActive) this.hexEditor.clearSearch();
+        this.hexEditor.syncSearchWindow?.();
         this.renderTabs();
     }
 
@@ -789,12 +704,14 @@ class FileTabSessionManager {
             return;
         }
 
+        editor.clearSearch?.();
         editor.clearToEmptyMemoryState?.({
             resetState: true,
             initializeScrolling: true
         });
         editor.currentFileName = '';
         editor.currentFilePath = null;
+        editor.currentDiskVersion = null;
         editor.currentFileExtension = '';
         editor.originalData = new Uint8Array(0);
         editor.currentCharTable = 'ascii';
@@ -848,7 +765,7 @@ class FileTabSessionManager {
             tab.className = `file-tab${session.id === this.activeSessionId ? ' active' : ''}`;
             tab.title = session.filePath || this.getSessionTitle(session);
             tab.addEventListener('click', () => {
-                this.activateSession(session.id);
+                void this.activateSession(session.id);
             });
             tab.addEventListener('contextmenu', (event) => {
                 event.preventDefault();
@@ -885,132 +802,3 @@ class FileTabSessionManager {
 }
 
 window.FileTabSessionManager = FileTabSessionManager;
-
-FileTabSessionManager.prototype.captureBinarySnapshot = function(snapshot) {
-    if (snapshot instanceof Uint8Array) {
-        return snapshot;
-    }
-
-    return this.cloneValue(snapshot);
-};
-
-FileTabSessionManager.prototype.captureOriginalDataState = function(editor, snapshot) {
-    const originalData = editor?.originalData;
-
-    if (originalData instanceof Uint8Array) {
-        if (snapshot instanceof Uint8Array && originalData === snapshot) {
-            return snapshot;
-        }
-        return originalData;
-    }
-
-    return this.cloneValue(originalData);
-};
-
-FileTabSessionManager.prototype.captureEditorStateInto = function(session) {
-    const editor = this.hexEditor;
-    if (!editor || !session) {
-        return session;
-    }
-
-    const snapshot = editor.createDataSnapshot();
-    session.snapshot = this.captureBinarySnapshot(snapshot);
-    session.originalData = this.captureOriginalDataState(editor, session.snapshot);
-    this.updateSessionVisualMetaFromEditor(session);
-    session.isLargeFile = !!editor.isLargeFileActive?.();
-
-    if (session.isLargeFile || (session.fileRef && editor.hasResolvedCurrentFilePath?.())) {
-        session.fileRef = {
-            name: session.fileName,
-            path: session.filePath,
-            size: session.fileSize
-        };
-    }
-
-    session.cursorPosition = editor.cursorPosition || 0;
-    session.selectionStart = editor.selectionStart || 0;
-    session.selectionEnd = editor.selectionEnd || 0;
-    session.currentScrollPercent = editor.currentScrollPercent || 0;
-    session.activePanel = editor.activePanel || 'hex';
-    session.editMode = editor.editMode || 'view';
-    session.insertMode = !!editor.insertMode;
-    session.nibblePosition = editor.nibblePosition || 0;
-    session.modifiedBytes = Array.from(editor.modifiedBytes || []);
-    session.bookmarks = this.cloneValue(editor.bookmarks || []);
-    session.currentBookmarkId = editor.currentBookmarkId || 0;
-    session.highlights = this.cloneValue(Array.from((editor.highlights || new Map()).values()));
-    session.highlightIdCounter = editor.highlightIdCounter || 0;
-    session.currentHighlightColor = editor.currentHighlightColor || 'default';
-    session.selectedHighlightId = editor.selectedHighlight?.id || null;
-    session.history = this.cloneValue(editor.history || []);
-    session.historyIndex = typeof editor.historyIndex === 'number' ? editor.historyIndex : -1;
-    session.searchResults = this.cloneValue(editor.searchResults || []);
-    session.currentSearchIndex = typeof editor.currentSearchIndex === 'number' ? editor.currentSearchIndex : -1;
-    session.lastSearchTerm = editor.lastSearchTerm || '';
-    session.gameAnalysis = this.cloneValue(editor.gameAnalysis || {});
-    session.currentCharTable = editor.currentCharTable || 'ascii';
-    session.selectedCharTable = this.getSessionCustomTableState(editor, session.currentCharTable);
-    session.fileKey = session.fileKey || this.getSessionFileKey(session.fileRef || {
-        path: session.filePath,
-        name: session.fileName,
-        size: session.fileSize
-    });
-
-    return session;
-};
-
-FileTabSessionManager.prototype.confirmCloseWithUnsavedChanges = function(session) {
-    const message = `Fechar "${this.getSessionTitle(session)}" e perder as alterações não salvas?`;
-
-    return new Promise((resolve) => {
-        if (window.notificationSystem && typeof window.notificationSystem.confirm === 'function') {
-            window.notificationSystem.confirm(
-                message,
-                'Alterações não salvas',
-                () => resolve(true),
-                () => resolve(false)
-            );
-            return;
-        }
-
-        resolve(window.confirm(message));
-    });
-};
-
-FileTabSessionManager.prototype.closeSession = async function(sessionId) {
-    const sessionIndex = this.sessions.findIndex((session) => session.id === sessionId);
-    if (sessionIndex === -1) {
-        return;
-    }
-
-    const session = this.sessions[sessionIndex];
-    const isActiveSession = session.id === this.activeSessionId;
-
-    if (isActiveSession) {
-        this.updateSessionVisualMetaFromEditor(session);
-        session.hasUnsavedChanges = !!this.hexEditor?.hasUnsavedChanges;
-        session.fileName = this.hexEditor?.currentFileName || session.fileName;
-    }
-
-    if (session.hasUnsavedChanges) {
-        const confirmed = await this.confirmCloseWithUnsavedChanges(session);
-        if (!confirmed) {
-            return;
-        }
-    }
-
-    this.sessions.splice(sessionIndex, 1);
-
-    if (isActiveSession) {
-        const fallbackSession = this.sessions[Math.max(0, sessionIndex - 1)] || this.sessions[0] || null;
-        this.activeSessionId = null;
-
-        if (fallbackSession) {
-            await this.activateSession(fallbackSession.id);
-        } else {
-            this.clearEditorState();
-        }
-    }
-
-    this.renderTabs();
-};

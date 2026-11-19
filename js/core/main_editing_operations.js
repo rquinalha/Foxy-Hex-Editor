@@ -86,6 +86,7 @@ getShiftJISCharByteRange(position) {
 },
 
 insertBytesAt(position, bytes, description = 'Insert bytes') {
+    if (this.isDocumentEditLocked?.()) return false;
     if (this.editMode !== 'edit') return false;
 
     const payload = this.normalizeByteArray(bytes);
@@ -104,6 +105,7 @@ insertBytesAt(position, bytes, description = 'Insert bytes') {
 },
 
 deleteRangeInternal(start, end, description = 'Delete bytes') {
+    if (this.isDocumentEditLocked?.()) return false;
     if (this.editMode !== 'edit') return false;
 
     const normalizedRange = this.normalizeEditableRange(start, end);
@@ -123,6 +125,7 @@ deleteRangeInternal(start, end, description = 'Delete bytes') {
 },
 
 overwriteBytesAt(position, bytes, description = 'Overwrite bytes') {
+    if (this.isDocumentEditLocked?.()) return false;
     if (this.editMode !== 'edit') return false;
 
     const payload = this.normalizeByteArray(bytes);
@@ -133,7 +136,7 @@ overwriteBytesAt(position, bytes, description = 'Overwrite bytes') {
     for (let i = 0; i < payload.length; i++) {
         const targetPos = safePosition + i;
         if (targetPos >= this.getDataLength()) break;
-        const oldValue = this.getByteAt(targetPos);
+        const oldValue = this.getKnownEditingByte(targetPos);
         const newValue = payload[i];
         if (oldValue === newValue) continue;
         if (!this.setByteAt(targetPos, newValue)) continue;
@@ -149,7 +152,32 @@ overwriteBytesAt(position, bytes, description = 'Overwrite bytes') {
     return true;
 },
 
+applySelectionImport({ selection, data, insertionMode }) {
+    const tabs = window.fileTabManager;
+    if (!selection?.sessionId || selection.sessionId !== tabs?.activeSessionId ||
+        selection.revision !== (this.documentRevision || 0) || this.isDocumentEditLocked?.()) {
+        throw new Error('A aba ou os dados mudaram. Volte à seleção e abra a importação novamente.');
+    }
+    const { start, length } = selection;
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(length) || start < 0 ||
+        length <= 0 || start + length > this.getDataLength() ||
+        !(data instanceof Uint8Array) || !data.length || data.length > 1024 * 1024 ||
+        (!insertionMode && data.length > length)) {
+        throw new Error('Trecho de importação inválido. O limite é de 1 MiB por operação.');
+    }
+    const previousEditMode = this.editMode;
+    this.editMode = 'edit';
+    try {
+        const applied = this.replaceSelectionWithBytes(start, start + length, data, insertionMode, 'Importação');
+        if (!applied) throw new Error('A importação não alterou os bytes selecionados.');
+        return data.length;
+    } finally {
+        this.editMode = previousEditMode;
+    }
+},
+
 replaceSelectionWithBytes(start, end, bytes, insertionMode, description = 'Replace selection') {
+    if (this.isDocumentEditLocked?.()) return false;
     const payload = this.normalizeByteArray(bytes);
     const normalizedRange = this.normalizeEditableRange(start, end);
     const safeStart = normalizedRange.start;
@@ -172,12 +200,17 @@ replaceSelectionWithBytes(start, end, bytes, insertionMode, description = 'Repla
     return true;
 },
 
+getKnownEditingByte(position) {
+    const handler = this.getVirtualNavigationHandler?.();
+    return handler ? handler.getByteSync(position, null) : this.getByteAt(position);
+},
+
 editByte(position, newValue, description = 'Edit byte') {
 if (this.editMode !== 'edit' || position >= this.getDataLength()) {
     return false;
 }
 
-const oldValue = this.getByteAt(position);
+const oldValue = this.getKnownEditingByte(position);
 if (oldValue === newValue) return false;
 
 if (!this.setByteAt(position, newValue)) {
@@ -186,8 +219,9 @@ if (!this.setByteAt(position, newValue)) {
 this.modifiedBytes.add(position);
 this.hasUnsavedChanges = true;
 
+const previousHex = oldValue == null ? '??' : oldValue.toString(16).toUpperCase();
 this.saveState(
-    `${description} at 0x${position.toString(16).toUpperCase()}: 0x${oldValue.toString(16).toUpperCase()} -> 0x${newValue.toString(16).toUpperCase()}`,
+    `${description} at 0x${position.toString(16).toUpperCase()}: 0x${previousHex} -> 0x${newValue.toString(16).toUpperCase()}`,
     { change: { position, oldValue, newValue } }
 );
 this.emit('dataChange', { position, oldValue, newValue });
@@ -196,6 +230,7 @@ return true;
 },
 
 handleHexEdit(char) {
+if (this.isDocumentEditLocked?.()) return;
 if (this.editMode !== 'edit') return;
 
 const hexChar = char.toUpperCase();
@@ -218,13 +253,13 @@ if (this.insertMode) {
         const newByte = parseInt(hexChar, 16) << 4;
         this.nibblePosition = 1;
         this.editingBytes.add(insertPosition);
-        this.setByteAt(insertPosition, newByte);
-        this.renderCurrentView(true);
+        if (!this.editByte(insertPosition, newByte, 'Hex insert')) this.renderCurrentView(true);
         return;
     }
 
     const targetPosition = Math.max(0, Math.min(insertPosition, this.getDataLength() - 1));
-    const currentByte = this.getByteAt(targetPosition) || 0;
+    const currentByte = this.getKnownEditingByte(targetPosition);
+    if (currentByte == null) return;
     const newByte = (currentByte & 0xF0) | parseInt(hexChar, 16);
     this.nibblePosition = 0;
 
@@ -239,7 +274,8 @@ if (this.insertMode) {
 }
 
 const position = this.cursorPosition;
-let currentByte = this.getByteAt(position);
+const currentByte = this.getKnownEditingByte(position);
+if (currentByte == null) return;
 let newByte;
 
 const currentTable = this.charTables && this.charTables[this.currentCharTable];
@@ -258,8 +294,7 @@ if (this.nibblePosition === 0) {
         }
     }
 
-    this.setByteAt(position, newByte);
-    this.completeRenderWithColors(this.currentScrollPercent, true);
+    if (!this.editByte(position, newByte, 'Hex edit')) this.completeRenderWithColors(this.currentScrollPercent, true);
 } else {
     newByte = (currentByte & 0xF0) | parseInt(hexChar, 16);
     this.nibblePosition = 0;
@@ -302,6 +337,7 @@ if (this.nibblePosition === 0) {
 },
 
 handleAsciiEdit(char) {
+if (this.isDocumentEditLocked?.()) return;
 if (this.editMode !== 'edit') return;
 this.nibblePosition = 0;
 

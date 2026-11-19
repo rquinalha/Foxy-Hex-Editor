@@ -45,16 +45,29 @@
         try {
             const shouldRefreshResults =
                 this.searchResults.length === 0 ||
-                this.lastSearchTerm !== findValue;
+                this.lastSearchTerm !== findValue ||
+                !!(window.fileTabManager && this.performDocumentSearch);
 
             if (shouldRefreshResults) {
-                await this.performSearch({
+                const oldMatch = this.searchResults[this.currentSearchIndex];
+                const found = await this.performSearch({
+                    mode: params?.mode,
                     findValue,
                     caseSensitive: caseSensitiveEnabled,
                     wholeWord: wholeWordEnabled,
                     regexMode: regexModeEnabled,
                     searchAllTabs: false
                 });
+                if (found === false) return;
+                if (oldMatch && (!oldMatch.sessionId || oldMatch.sessionId === window.fileTabManager?.activeSessionId)) {
+                    const index = this.searchResults.findIndex(match => match.offset === oldMatch.offset);
+                    if (index !== -1) this.currentSearchIndex = index;
+                }
+            }
+
+            if (replaceAll && this.searchTruncated) {
+                window.notificationSystem.warning('Refine a busca antes de substituir todas as ocorrências.', 'Substituir');
+                return;
             }
 
             if (this.searchResults.length === 0) {
@@ -66,7 +79,9 @@
             let replaceBytes = [];
             const hexPattern = /^[0-9A-Fa-f\s]+$/;
 
-            if (hexPattern.test(replaceValue) && replaceValue.includes(' ')) {
+            const mode = params?.mode;
+            const replaceAsHex = mode === 'hex' || ((!mode || mode === 'auto') && !regexModeEnabled && hexPattern.test(replaceValue));
+            if (replaceAsHex && replaceValue.includes(' ')) {
                 const cleanHex = replaceValue.replace(/\s+/g, '');
                 if (cleanHex.length % 2 !== 0) {
                     const i18n = window.I18n || { t: (k) => k };
@@ -82,7 +97,7 @@
                     }
                     replaceBytes.push(byte);
                 }
-            } else if (hexPattern.test(replaceValue) && replaceValue.length % 2 === 0) {
+            } else if (replaceAsHex && hexPattern.test(replaceValue) && replaceValue.length % 2 === 0) {
                 for (let i = 0; i < replaceValue.length; i += 2) {
                     const byte = parseInt(replaceValue.substr(i, 2), 16);
                     if (isNaN(byte)) {
@@ -93,6 +108,10 @@
                     replaceBytes.push(byte);
                 }
             } else {
+                if (mode === 'hex') {
+                    window.notificationSystem.error('Informe pares de dígitos hexadecimais.', 'Substituir');
+                    return;
+                }
                 const currentTable = this.charTables && this.currentCharTable ? this.charTables[this.currentCharTable] : null;
                 const isShiftJIS = currentTable && ((currentTable.type === 'shift-jis' || currentTable.type === 'shift_jis') || currentTable._isShiftJIS === true);
 
@@ -134,8 +153,15 @@
             let replacedCount = 0;
 
             if (replaceAll) {
-                for (let i = this.searchResults.length - 1; i >= 0; i--) {
-                    const result = this.searchResults[i];
+                const matches = [];
+                let end = 0;
+                for (const result of this.searchResults) {
+                    if (result.offset < end) continue;
+                    matches.push(result);
+                    end = result.offset + result.length;
+                }
+                for (let i = matches.length - 1; i >= 0; i--) {
+                    const result = matches[i];
                     if (this.replaceAtOffset(result.offset, result.length, replaceBytes)) {
                         replacedCount++;
                     }
@@ -194,17 +220,22 @@
     },
 // === SEARCH HIGHLIGHTING ===
 getSearchHighlight(offset) {
-if (!this.searchResultsSet || this.searchResultsSet.size === 0) return null;
-
-if (this.searchResultsSet.has(offset)) {
-    return {
-        current: this.currentSearchIndex >= 0 && 
-                 this.searchResults[this.currentSearchIndex] && 
-                 offset >= this.searchResults[this.currentSearchIndex].offset && 
-                 offset < this.searchResults[this.currentSearchIndex].offset + this.searchResults[this.currentSearchIndex].length
-    };
+const intervals = this.searchHighlightIndex?.intervals;
+if (!intervals?.length) {
+    if (!this.searchResultsSet?.has(offset)) return null;
+} else {
+    let start = 0;
+    let end = intervals.length;
+    while (start < end) {
+        const middle = Math.floor((start + end) / 2);
+        if (intervals[middle].end <= offset) start = middle + 1;
+        else end = middle;
+    }
+    if (!intervals[start] || intervals[start].start > offset) return null;
 }
-return null;
+const current = this.searchResults[this.currentSearchIndex];
+return { current: !!current && (!current.sessionId || current.sessionId === window.fileTabManager?.activeSessionId) &&
+    offset >= current.offset && offset < current.offset + current.length };
 },
 
 // === REPLACE METHODS ===

@@ -463,16 +463,17 @@
             });
 
             // Handler para comandos do menu Arquivo
-            function createElectronFileLike(fileName, filePath, fileSize, allData) {
-                const bytes = allData instanceof Uint8Array ? allData : new Uint8Array(allData || 0);
-                return {
-                    name: fileName,
-                    path: filePath,
-                    size: fileSize,
-                    type: 'application/octet-stream',
-                    lastModified: Date.now(),
-                    arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
-                };
+            async function openEditorPaths(filePaths) {
+                const fs = require('node:fs').promises;
+                const path = require('node:path');
+                const files = await Promise.all(filePaths.map(async (filePath) => {
+                    const realPath = await fs.realpath(filePath);
+                    const stats = await fs.stat(realPath);
+                    if (!stats.isFile()) throw new Error('O caminho selecionado não é um arquivo.');
+                    return { name: path.basename(filePath), path: realPath, size: stats.size };
+                }));
+                if (window.fileTabManager) await window.fileTabManager.openFiles(files);
+                else for (const file of files) await window.hexEditor.loadFile(file);
             }
 
             ipcRenderer.on('menu-open-file', async () => {
@@ -480,66 +481,11 @@
                     const result = await ipcRenderer.invoke('show-open-dialog', {
                         title: 'Abrir Arquivo',
                         properties: ['openFile', 'multiSelections'],
-                        filters: [
-                            { name: 'Todos os arquivos', extensions: ['*'] }
-                        ]
+                        filters: [{ name: 'Todos os arquivos', extensions: ['*'] }]
                     });
-                    
-                    if (!result.canceled && result.filePaths.length > 0) {
-                        const fs = require('fs');
-                        const path = require('path');
-                        const { ipcRenderer } = require('electron');
-
-                        for (const filePath of result.filePaths) {
-                            const stats = fs.statSync(filePath);
-                            const fileName = path.basename(filePath);
-                            const fileSize = stats.size;
-                            
-                            if (fileSize > 800 * 1024 * 1024) {
-                                const fileRef = {
-                                    name: fileName,
-                                    path: filePath,
-                                    size: fileSize
-                                };
-
-                                if (window.fileTabManager && typeof window.fileTabManager.openFiles === 'function') {
-                                    await window.fileTabManager.openFiles([fileRef]);
-                                } else if (window.hexEditor && typeof window.hexEditor.loadFile === 'function') {
-                                    await window.hexEditor.loadFile(fileRef);
-                                }
-                                continue;
-                            }
-
-                            const chunkSize = 10 * 1024 * 1024; // 10MB
-                            const totalChunks = Math.ceil(fileSize / chunkSize);
-                            const allData = new Uint8Array(fileSize);
-                            
-                            for (let i = 0; i < totalChunks; i++) {
-                                const start = i * chunkSize;
-                                const length = Math.min(chunkSize, fileSize - start);
-                                const chunkResult = await ipcRenderer.invoke('read-file-chunk', filePath, start, length);
-                                
-                                if (!chunkResult.success) {
-                                    throw new Error(chunkResult.error || 'Erro ao ler chunk');
-                                }
-                                
-                                allData.set(chunkResult.data, start);
-                            }
-                            
-                            const fileObject = createElectronFileLike(fileName, filePath, fileSize, allData);
-                            
-                            if (window.fileTabManager && typeof window.fileTabManager.openFiles === 'function') {
-                                await window.fileTabManager.openFiles([fileObject]);
-                            } else if (window.hexEditor && typeof window.hexEditor.loadFile === 'function') {
-                                await window.hexEditor.loadFile(fileObject);
-                            }
-                        }
-                    }
+                    if (!result.canceled) await openEditorPaths(result.filePaths);
                 } catch (error) {
-                    console.error('L Erro ao abrir arquivo:', error);
-                    if (window.notificationSystem) {
-                        window.notificationSystem.error('Erro ao abrir arquivo: ' + error.message, 'Erro');
-                    }
+                    window.notificationSystem?.error(error.message, 'Erro ao abrir arquivo');
                 }
             });
 
@@ -714,130 +660,21 @@
             ipcRenderer.on('execute-import-selection', (event, data) => {
                 const hexEditor = window.hexEditor;
                 if (!hexEditor) return;
-
-                const importData = new Uint8Array(data.data);
-                const selection = data.selection; // { start, end, length }
-                const useInsert = data.insertionMode;
-                const previousEditMode = hexEditor.editMode;
-
                 try {
-                    if (hexEditor.editMode !== 'edit') {
-                        hexEditor.editMode = 'edit';
-                    }
-
-                    let importApplied = false;
-
-                    if (typeof hexEditor.replaceSelectionWithBytes === 'function') {
-                        importApplied = hexEditor.replaceSelectionWithBytes(
-                            selection.start,
-                            selection.start + selection.length,
-                            importData,
-                            useInsert,
-                            useInsert ? 'Importação inserir' : 'Importação sobrescrever'
-                        );
-                    } else if (useInsert) {
-                        const finalSize = hexEditor.data.length + importData.length;
-                        const newData = new Uint8Array(finalSize);
-                        newData.set(hexEditor.data.slice(0, selection.start));
-                        newData.set(importData, selection.start);
-                        newData.set(hexEditor.data.slice(selection.start), selection.start + importData.length);
-                        hexEditor.data = newData;
-                        for (let i = 0; i < importData.length; i++) {
-                            hexEditor.modifiedBytes.add(selection.start + i);
-                        }
-                        hexEditor.hasUnsavedChanges = true;
-                        hexEditor.selectionStart = selection.start;
-                        hexEditor.selectionEnd = selection.start + importData.length - 1;
-                        hexEditor.cursorPosition = hexEditor.selectionEnd;
-                        hexEditor.render();
-                        importApplied = true;
-                    } else {
-                        for (let i = 0; i < importData.length; i++) {
-                            const pos = selection.start + i;
-                            if (pos < hexEditor.data.length) {
-                                hexEditor.data[pos] = importData[i];
-                                if (hexEditor.modifiedBytes) {
-                                    hexEditor.modifiedBytes.add(pos);
-                                }
-                            }
-                        }
-                        hexEditor.hasUnsavedChanges = true;
-                        hexEditor.selectionStart = selection.start;
-                        hexEditor.selectionEnd = selection.start + Math.min(importData.length, selection.length) - 1;
-                        hexEditor.cursorPosition = hexEditor.selectionEnd;
-                        hexEditor.render();
-                        importApplied = true;
-                    }
-
-                    if (!importApplied) {
-                        throw new Error('A importação não pôde ser aplicada no estado atual do editor.');
-                    }
-
-                    hexEditor.editMode = previousEditMode;
-
-                    if (window.notificationSystem) {
-                        window.notificationSystem.success(`Importação concluída! ${importData.length} bytes processados`, 'Importação');
-                    }
-                } catch (err) {
-                    hexEditor.editMode = previousEditMode;
-                    console.error('Erro ao executar importação:', err);
-                    if (window.notificationSystem) window.notificationSystem.error('Erro ao importar: ' + err.message, 'Erro');
+                    const result = hexEditor.applySelectionImport(data);
+                    window.notificationSystem?.success('Importação concluída (' + result + ' bytes).', 'Importação');
+                } catch (error) {
+                    window.notificationSystem?.error(error.message, 'Erro ao importar');
                 }
             });
 
 
             // Handler para abrir arquivo recente
             ipcRenderer.on('open-recent-file', async (event, fileData) => {
-                const { ipcRenderer } = require('electron');
-                const path = fileData.path;
-                const name = fileData.name;
-                const size = fileData.size;
-                
                 try {
-                    // Arquivos grandes (>800MB): usar EnhancedLargeFileHandler
-                    if (size > 800 * 1024 * 1024) {
-                        const fileRef = {
-                            name: name,
-                            path: path,
-                            size: size
-                        };
-
-                        if (window.fileTabManager && typeof window.fileTabManager.openFiles === 'function') {
-                            await window.fileTabManager.openFiles([fileRef]);
-                        } else if (window.hexEditor && typeof window.hexEditor.loadFile === 'function') {
-                            await window.hexEditor.loadFile(fileRef);
-                        }
-                    } else {
-                        // Arquivos pequenos: ler via IPC read-file-chunk
-                        const chunkSize = 10 * 1024 * 1024; // 10MB
-                        const totalChunks = Math.ceil(size / chunkSize);
-                        const allData = new Uint8Array(size);
-                        
-                        for (let i = 0; i < totalChunks; i++) {
-                            const start = i * chunkSize;
-                            const length = Math.min(chunkSize, size - start);
-                            const result = await ipcRenderer.invoke('read-file-chunk', path, start, length);
-                            
-                            if (!result.success) {
-                                throw new Error(result.error || 'Erro ao ler chunk');
-                            }
-                            
-                            allData.set(result.data, start);
-                        }
-                        
-                        const fileObject = createElectronFileLike(name, path, size, allData);
-                        
-                        if (window.fileTabManager && typeof window.fileTabManager.openFiles === 'function') {
-                            await window.fileTabManager.openFiles([fileObject]);
-                        } else if (window.hexEditor && typeof window.hexEditor.loadFile === 'function') {
-                            await window.hexEditor.loadFile(fileObject);
-                        }
-                    }
+                    await openEditorPaths([fileData.path]);
                 } catch (error) {
-                    console.error('L Erro ao abrir arquivo recente:', error);
-                    if (window.notificationSystem) {
-                        window.notificationSystem.error('Erro ao abrir arquivo: ' + error.message, 'Erro');
-                    }
+                    window.notificationSystem?.error(error.message, 'Erro ao abrir arquivo recente');
                 }
             });
         } else {
@@ -879,6 +716,7 @@
 <script src="js/core/main_events.js"></script>
 <script src="js/core/main_char_tables_management.js"></script>
 <script src="js/core/main_table_codec.js"></script>
+<script src="js/core/table-text-reader.js"></script>
 <script src="js/core/main_char_tables_grid.js"></script>
     <script src="js/core/main_rendering.js"></script>
     <script src="js/core/main_analysis_core.js"></script>
@@ -893,6 +731,7 @@
     <script src="js/core/main_bookmarks.js"></script>
     <script src="js/core/boyer-moore.js"></script>
     <script src="js/core/main_search.js"></script>
+    <script src="js/core/main_document_search.js"></script>
     <script src="js/core/main_bookmark_modal.js"></script>
     <script src="js/core/main_highlights_table.js"></script>
     <script src="js/core/main_search_basic.js"></script>

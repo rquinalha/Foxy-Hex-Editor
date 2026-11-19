@@ -116,12 +116,10 @@ class NotificationSystem {
             <div class="notification-modal">
                 <div class="notification-header">
                     <div class="notification-icon ${type}">${finalIcon}</div>
-                    <h3 class="notification-title">${defaultTitle}</h3>
+                    <h3 class="notification-title"></h3>
                     <button class="notification-close" title="Fechar">×</button>
                 </div>
-                <div class="notification-content">
-                    ${this.formatMessage(message)}
-                </div>
+                <div class="notification-content" style="white-space: pre-line"></div>
                 ${actions.length > 0 ? `
                     <div class="notification-actions">
                         ${actions.map(action => `
@@ -138,15 +136,9 @@ class NotificationSystem {
             </div>
         `;
 
+        notification.querySelector('.notification-title').textContent = defaultTitle;
+        notification.querySelector('.notification-content').textContent = message;
         return notification;
-    }
-
-    formatMessage(message) {
-        if (typeof message === 'string') {
-            // Converter quebras de linha em <br>
-            return message.replace(/\n/g, '<br>');
-        }
-        return message;
     }
 
     t(key, fallback) {
@@ -228,6 +220,7 @@ class NotificationSystem {
             message,
             type: 'warning',
             autoClose: false,
+            onClose: onCancel,
             actions: [
                 {
                     id: 'cancel',
@@ -258,12 +251,12 @@ class NotificationSystem {
             <div class="notification-modal">
                 <div class="notification-header">
                     <div class="notification-icon info">📝</div>
-                    <h3 class="notification-title">${title}</h3>
+                    <h3 class="notification-title"></h3>
                     <button class="notification-close" title="Fechar">×</button>
                 </div>
                 <div class="notification-content">
-                    <p>${message}</p>
-                    <input type="text" class="modal-input" value="${defaultValue}" placeholder="Digite aqui..." style="width: 100%; margin-top: 10px;">
+                    <p></p>
+                    <input type="text" class="modal-input" placeholder="Digite aqui..." style="width: 100%; margin-top: 10px;">
                 </div>
                 <div class="notification-actions">
                     <button class="notification-btn secondary" data-action="cancel">Cancelar</button>
@@ -276,6 +269,9 @@ class NotificationSystem {
         requestAnimationFrame(() => notification.classList.add('show'));
 
         const input = notification.querySelector('input');
+        input.value = defaultValue;
+        notification.querySelector('.notification-title').textContent = title;
+        notification.querySelector('.notification-content p').textContent = message;
         const confirmBtn = notification.querySelector('[data-action="confirm"]');
         const cancelBtn = notification.querySelector('[data-action="cancel"]');
         const closeBtn = notification.querySelector('.notification-close');

@@ -1,6 +1,6 @@
 Object.assign(FoxyHexEditorComplete.prototype, {
     getSearchWindowPreviewLimit() {
-        return 1000;
+        return 100;
     },
 
     showFindReplaceModal() {
@@ -11,19 +11,12 @@ Object.assign(FoxyHexEditorComplete.prototype, {
             findValue: findInput ? findInput.value : this.lastSearchTerm || '',
             replaceValue: replaceInput ? replaceInput.value : '',
             caseSensitive: document.getElementById('case-sensitive')?.checked || false,
+            mode: this.searchToolParams?.mode || 'auto',
             regexMode: document.getElementById('regex-mode')?.checked || false,
             wholeWord: document.getElementById('whole-word')?.checked || false,
             replaceAll: document.getElementById('replace-all')?.checked || false,
             searchAllTabs: document.getElementById('search-all-tabs')?.checked || false,
-            results: {
-                count: this.searchResults.length,
-                currentIndex: this.currentSearchIndex,
-                searchTerm: this.lastSearchTerm,
-                flatResults: this.buildSearchWindowFlatResults(),
-                groupedResults: this.globalTabSearchGroups || [],
-                skippedLargeCount: this.globalTabSearchSkippedLargeCount || 0,
-                searchAllTabs: !!this.globalTabSearchActive
-            }
+            results: this.getSearchWindowResults()
         };
 
         const { ipcRenderer } = require('electron');
@@ -45,6 +38,7 @@ Object.assign(FoxyHexEditorComplete.prototype, {
 
     handleSearchToolAction(data) {
         const { action, params } = data;
+        this.searchToolParams = params;
         
         // Sincronizar estados das checkboxes se necessário (opcional, já que passamos no params)
         const cs = document.getElementById('case-sensitive');
@@ -72,6 +66,12 @@ Object.assign(FoxyHexEditorComplete.prototype, {
         switch (action) {
             case 'perform-search':
                 this.performSearch(params);
+                return;
+            case 'cancel-search':
+                this.cancelDocumentSearch?.();
+                return;
+            case 'search-page':
+                this.searchPreviewPage = Math.max(0, Math.min(params.page, Math.ceil(this.searchResults.length / this.getSearchWindowPreviewLimit()) - 1));
                 break;
             case 'perform-replace':
                 this.performReplace(params);
@@ -93,105 +93,33 @@ Object.assign(FoxyHexEditorComplete.prototype, {
         this.syncSearchWindow();
     },
 
-    buildSearchWindowFlatResults() {
-        if (!Array.isArray(this.searchResults) || this.searchResults.length === 0) {
-            return [];
-        }
-
-        const previewLimit = this.getSearchWindowPreviewLimit();
-        const limitedResults = this.searchResults.slice(0, previewLimit);
-        const dataLength = typeof this.getDataLength === 'function' ? this.getDataLength() : 0;
-        const previewRadius = this.charDecoder16 ? 8 : 16;
-
-        return limitedResults.map((result, index) => {
-            const start = Math.max(0, result.offset - previewRadius);
-            const end = Math.min(dataLength, result.offset + result.length + previewRadius);
-            let preview = '';
-
-            try {
-                const bytes = this.getRangeAt(start, Math.max(0, end - start));
-                preview = this.decodeBytesWithCurrentTable?.(bytes) || '';
-            } catch (_) {
-                preview = '';
-            }
-
-            preview = preview.replace(/\s+/g, ' ').trim() || '(sem prévia)';
-
-            return {
-                globalIndex: index,
-                offset: result.offset,
-                offsetHex: result.offset.toString(16).toUpperCase().padStart(8, '0'),
-                length: result.length,
-                type: result.type || 'text',
-                preview,
-                fileName: this.currentFileName || 'Arquivo atual'
-            };
-        });
-    },
-
-    async buildSearchPreviewForResult(result) {
-        const dataLength = typeof this.getDataLength === 'function' ? this.getDataLength() : 0;
-        const previewRadius = this.charDecoder16 ? 8 : 16;
-        const start = Math.max(0, result.offset - previewRadius);
-        const end = Math.min(dataLength, result.offset + result.length + previewRadius);
-        const rangeLength = Math.max(0, end - start);
-
-        if (rangeLength <= 0) {
-            return '(sem prévia)';
-        }
-
-        let bytes = null;
-
-        try {
-            bytes = await this.getRangeAtAsync(start, rangeLength);
-        } catch (_) {
-            bytes = null;
-        }
-
-        if (!bytes || !bytes.length) {
-            return '(sem prévia)';
-        }
-
-        let preview = '';
-        try {
-            preview = this.decodeBytesWithCurrentTable?.(bytes) || '';
-        } catch (_) {
-            preview = '';
-        }
-
-        preview = preview.replace(/\s+/g, ' ').trim();
-        return preview || '(sem prévia)';
-    },
-
-    async buildSearchWindowFlatResultsAsync() {
-        if (!Array.isArray(this.searchResults) || this.searchResults.length === 0) {
-            return [];
-        }
-
-        const fileName = this.currentFileName || 'Arquivo atual';
-        return Promise.all(this.searchResults.map(async (result, index) => ({
-            globalIndex: index,
-            offset: result.offset,
+    getSearchWindowResults() {
+        const pageSize = this.getSearchWindowPreviewLimit();
+        const pages = Math.max(1, Math.ceil(this.searchResults.length / pageSize));
+        const page = Math.min(this.searchPreviewPage || 0, pages - 1);
+        const first = page * pageSize;
+        const flatResults = this.searchResults.slice(first, first + pageSize).map((result, index) => ({
+            ...result,
+            globalIndex: first + index,
             offsetHex: result.offset.toString(16).toUpperCase().padStart(8, '0'),
-            length: result.length,
-            type: result.type || 'text',
-            preview: await this.buildSearchPreviewForResult(result),
-            fileName
-        })));
-    },
-
-    async syncSearchWindow() {
-        const { ipcRenderer } = require('electron');
-        const flatResults = await this.buildSearchWindowFlatResultsAsync();
-        ipcRenderer.send('search-results-update', {
+            fileName: result.fileName || this.currentFileName || 'Arquivo atual'
+        }));
+        return {
             count: this.searchResults.length,
             currentIndex: this.currentSearchIndex,
             searchTerm: this.lastSearchTerm,
-            flatResults,
+            flatResults, page, pages,
             groupedResults: this.globalTabSearchGroups || [],
-            skippedLargeCount: this.globalTabSearchSkippedLargeCount || 0,
-            searchAllTabs: !!this.globalTabSearchActive
-        });
+            searchAllTabs: !!this.globalTabSearchActive,
+            notice: this.searchNotice,
+            progress: this.documentSearchJob?.progress
+        };
+    },
+
+    syncSearchWindow() {
+        if (!this._searchIpcConfigured) return;
+        const { ipcRenderer } = require('electron');
+        ipcRenderer.send('search-results-update', this.getSearchWindowResults());
     },
 
     hideFindReplaceModal() {

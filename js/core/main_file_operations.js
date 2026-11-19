@@ -1,5 +1,13 @@
+function documentDiskVersion(stat) {
+    return { dev: stat.dev, ino: stat.ino, size: stat.size, mtimeMs: stat.mtimeMs, ctimeMs: stat.ctimeMs };
+}
+
+function sameDocumentDiskVersion(expected, actual) {
+    return !!actual && Object.keys(expected).every(key => expected[key] === actual[key]);
+}
+
 Object.assign(FoxyHexEditorComplete.prototype, {
-async loadFile(file) {
+async loadFile(file, { preserveSearch = false } = {}) {
     if (!file) {
         return Promise.reject(new Error('No file provided'));
     }
@@ -8,63 +16,39 @@ async loadFile(file) {
         return Promise.reject(new Error('Hex Editor so funciona no Electron'));
     }
 
-    const previousFileName = this.currentFileName;
-    const resolvedFilePath = this.resolveLoadedFilePath(file);
-
-    this.currentFileName = file.name;
-    this.currentFilePath = resolvedFilePath;
+    const filePath = this.resolveLoadedFilePath(file);
+    const fs = filePath ? require('node:fs').promises : null;
+    const stat = fs ? await fs.stat(filePath) : null;
+    const diskVersion = stat ? documentDiskVersion(stat) : null;
+    if (stat && (!stat.isFile() || stat.size !== file.size ||
+        (file.diskVersion && !sameDocumentDiskVersion(file.diskVersion, diskVersion)))) {
+        throw new Error('O arquivo mudou no disco. Abra-o novamente.');
+    }
+    const useVirtual = !!filePath && this.shouldUseLargeFileMode(file);
+    const arrayBuffer = useVirtual ? null : await this.readFileAsArrayBuffer(file);
+    if (fs && !useVirtual && !sameDocumentDiskVersion(diskVersion, documentDiskVersion(await fs.stat(filePath)))) {
+        throw new Error('O arquivo mudou durante a abertura.');
+    }
+    this.currentDiskVersion = diskVersion;
 
     this.clearAllState();
     this.resetCharacterTableStateForNewFile();
-
     this.exitVirtualDataMode?.();
-
-    const isSameFile = previousFileName === file.name;
-    if (isSameFile) {
-        this.forceFileReload = true;
+    if (useVirtual) {
+        const source = filePath
+            ? { name: file.name, path: filePath, size: file.size, forceVirtual: file.forceVirtual, diskVersion }
+            : file;
+        const virtualData = await this.ensureLargeFileHandler().loadLargeFile(source, { preserveSearch });
+        this.syncLoadedFileContext(file);
+        return virtualData;
     }
 
-    if (file.size === 0) {
-        console.error('File is empty');
-        return Promise.reject(new Error('O arquivo esta vazio. Por favor, selecione um arquivo valido.'));
-    }
-
-    if (this.shouldUseLargeFileMode(file)) {
-        const handler = this.ensureLargeFileHandler?.();
-
-        return handler.loadLargeFile(file).then((virtualData) => {
-            this.syncLoadedFileContext(file);
-            return virtualData;
-        });
-    }
-
-    const arrayBuffer = await this.readFileAsArrayBuffer(file);
-    if (!arrayBuffer || arrayBuffer.byteLength === 0) {
-        throw new Error('FileReader returned empty result');
-    }
-
-    return new Promise((resolve, reject) => {
-        if (this.loadingTimeout) {
-            clearTimeout(this.loadingTimeout);
-        }
-
-        this.loadingTimeout = setTimeout(() => {
-            this.loadingTimeout = null;
-
-            try {
-                this.resetToCleanState();
-                this.loadData(arrayBuffer);
-                this.syncLoadedFileContext(file);
-
-                const loadedData = this.getData();
-                this.emit('fileLoad', { file, data: loadedData });
-                resolve(loadedData);
-            } catch (error) {
-                console.error('[HEX] Erro ao processar arquivo:', error);
-                reject(error);
-            }
-        }, isSameFile ? 100 : 0);
-    });
+    this.resetToCleanState();
+    this.loadData(arrayBuffer);
+    this.syncLoadedFileContext(file);
+    const loadedData = this.getData();
+    this.emit('fileLoad', { file, data: loadedData });
+    return loadedData;
 },
 
 resolveLoadedFilePath(file) {
@@ -92,8 +76,7 @@ resolveLoadedFilePath(file) {
         return file.webkitRelativePath;
     }
 
-    // Se tivermos apenas o nome, retornamos o nome (casos de Blob ou arquivo sem path acessível)
-    return file.name || null;
+    return null;
 },
 
 async readFileAsArrayBuffer(file) {
@@ -105,6 +88,11 @@ async readFileAsArrayBuffer(file) {
         return file.arrayBuffer();
     }
 
+    if (file.path) {
+        const bytes = await require('node:fs').promises.readFile(file.path);
+        return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    }
+
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
 
@@ -113,6 +101,7 @@ async readFileAsArrayBuffer(file) {
             resolve(event.target?.result);
         };
 
+        reader.onabort = () => reject(new Error('A leitura foi cancelada.'));
         reader.onerror = () => {
             console.error('[HEX] Erro ao ler arquivo:', reader.error);
             this.currentFileReader = null;
@@ -252,17 +241,12 @@ forceCompleteRender() {
 },
 
 save() {
-if (this.getDataLength() === 0) {
-window.notificationSystem.warning('Nenhum dado para salvar. Por favor, carregue um arquivo primeiro.', 'Nenhum Dado');
-return this;
+if (window.intelligentSave) {
+    window.intelligentSave.save();
+    return this;
 }
 
 if (!this.hasUnsavedChanges) {
-return this;
-}
-
-if (window.intelligentSave) {
-    window.intelligentSave.save();
     return this;
 }
 
